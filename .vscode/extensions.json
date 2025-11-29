@@ -1,0 +1,27 @@
+{
+  "recommendations": [
+    // TypeScript/JavaScript
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    
+    // React
+    "dsznajder.es7-react-js-snippets",
+    "burkeholland.simple-react-snippets",
+    
+    // TypeORM/Database
+    "alexcvzz.vscode-sqlite",
+    
+    // REST API テスト
+    "humao.rest-client",
+    "rangav.vscode-thunder-client",
+    
+    // Git
+    "eamodio.gitlens",
+    
+    // その他便利ツール
+    "formulahendry.auto-rename-tag",
+    "christian-kohler.path-intellisense",
+    "bradlc.vscode-tailwindcss",
+    "chakra-ui.panda-css-vscode"
+  ]
+}
