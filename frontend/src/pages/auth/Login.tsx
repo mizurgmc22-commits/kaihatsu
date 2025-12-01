@@ -12,7 +12,8 @@ import {
   Text,
   Container,
   Alert,
-  AlertIcon
+  AlertIcon,
+  Link
 } from '@chakra-ui/react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -95,7 +96,10 @@ const Login = () => {
           </form>
           
           <Text mt={6} textAlign="center" fontSize="sm" color="gray.500">
-            ユーザー向け予約画面は <a href="/" style={{ color: '#3182ce' }}>こちら</a>
+            ユーザー向け予約画面は{' '}
+            <Link href="/" color="blue.500">
+              こちら
+            </Link>
           </Text>
         </Box>
       </Container>

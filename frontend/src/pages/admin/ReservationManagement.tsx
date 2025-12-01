@@ -19,7 +19,9 @@ import {
   IconButton,
   Tooltip,
   Text,
-  Flex
+  Flex,
+  FormControl,
+  FormLabel
 } from '@chakra-ui/react';
 import { FiCheck, FiX, FiEye } from 'react-icons/fi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -116,23 +118,27 @@ export default function ReservationManagement() {
       <Card mb={6}>
         <CardBody>
           <HStack spacing={4}>
-            <Select
-              aria-label="ステータスフィルタ"
-              title="ステータスフィルタ"
-              placeholder="すべてのステータス"
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setPage(1);
-              }}
-              maxW="200px"
-            >
-              <option value="pending">承認待ち</option>
-              <option value="approved">承認済み</option>
-              <option value="rejected">却下</option>
-              <option value="cancelled">キャンセル</option>
-              <option value="completed">完了</option>
-            </Select>
+            <FormControl maxW="200px">
+              <FormLabel htmlFor="status-filter" srOnly>
+                ステータスフィルタ
+              </FormLabel>
+              <Select
+                id="status-filter"
+                aria-label="ステータスフィルタ"
+                placeholder="すべてのステータス"
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="pending">承認待ち</option>
+                <option value="approved">承認済み</option>
+                <option value="rejected">却下</option>
+                <option value="cancelled">キャンセル</option>
+                <option value="completed">完了</option>
+              </Select>
+            </FormControl>
           </HStack>
         </CardBody>
       </Card>

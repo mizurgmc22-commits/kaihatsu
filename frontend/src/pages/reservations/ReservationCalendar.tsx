@@ -8,7 +8,9 @@ import {
   Spinner,
   Text,
   HStack,
-  Badge
+  Badge,
+  FormControl,
+  FormLabel
 } from '@chakra-ui/react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -104,21 +106,25 @@ export default function ReservationCalendar() {
       <Flex justify="space-between" align="center" mb={6}>
         <Heading size="lg">予約カレンダー</Heading>
         <HStack spacing={4}>
-          <Select
-            aria-label="カテゴリフィルタ"
-            title="カテゴリフィルタ"
-            placeholder="カテゴリで絞り込み"
-            maxW="200px"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            bg="white"
-          >
-            {categories?.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </Select>
+          <FormControl maxW="200px">
+            <FormLabel htmlFor="category-filter" srOnly>
+              カテゴリフィルタ
+            </FormLabel>
+            <Select
+              id="category-filter"
+              aria-label="カテゴリフィルタ"
+              placeholder="カテゴリで絞り込み"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              bg="白"
+            >
+              {categories?.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </Select>
+          </FormControl>
         </HStack>
       </Flex>
 
