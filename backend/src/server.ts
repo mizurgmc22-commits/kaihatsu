@@ -8,13 +8,22 @@ import equipmentRouter from './routes/equipment';
 import reservationRouter from './routes/reservation';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 
 app.use(cors());
 app.use(express.json());
 
+app.use((req, _res, next) => {
+  console.log('REQUEST', req.method, req.url);
+  next();
+});
+
 app.get('/', (_req, res) => {
   res.json({ message: '資機材予約システムAPI' });
+});
+
+app.get('/api/debug-routes', (_req, res) => {
+  res.json({ ok: true });
 });
 
 app.use('/api/auth', authRouter);

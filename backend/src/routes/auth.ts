@@ -10,6 +10,42 @@ const userRepo = () => AppDataSource.getRepository(User);
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const JWT_EXPIRES_IN = '7d';
 
+// 認証ミドルウェア
+export const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: '認証が必要です' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number; role: string };
+    const user = await userRepo().findOne({ where: { id: decoded.userId, isActive: true } });
+
+    if (!user) {
+      return res.status(401).json({ message: 'ユーザーが見つかりません' });
+    }
+
+    (req as any).user = user;
+    next();
+  } catch (error) {
+    return res.status(401).json({ message: '無効なトークンです' });
+  }
+};
+
+// 管理者ロールチェック
+export const adminMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  const user = (req as any).user;
+
+  if (!user || (user.role !== 'admin' && user.role !== 'system_admin')) {
+    return res.status(403).json({ message: '管理者権限が必要です' });
+  }
+
+  next();
+};
+
 // ログイン
 authRouter.post('/login', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -145,31 +181,81 @@ authRouter.post('/register', async (req: Request, res: Response, next: NextFunct
   }
 });
 
+// 管理者一覧取得
+authRouter.get(
+  '/admins',
+  authMiddleware,
+  adminMiddleware,
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const admins = await userRepo().find({
+        where: [{ role: 'admin' }, { role: 'system_admin' }],
+        order: { createdAt: 'DESC' }
+      });
+
+      res.json(
+        admins.map((admin) => ({
+          id: admin.id,
+          name: admin.name,
+          email: admin.email,
+          role: admin.role,
+          department: admin.department,
+          lastLoginAt: admin.lastLoginAt,
+          createdAt: admin.createdAt
+        }))
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// 管理者登録
+authRouter.post(
+  '/admins',
+  authMiddleware,
+  adminMiddleware,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { name, email, password, department } = req.body;
+
+      if (!name || !email || !password || !department) {
+        return res
+          .status(400)
+          .json({ message: '名前、メールアドレス、パスワード、部署は必須です' });
+      }
+
+      const existingUser = await userRepo().findOne({
+        where: { email: email.toLowerCase() }
+      });
+      if (existingUser) {
+        return res.status(400).json({ message: 'このメールアドレスは既に登録されています' });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      const adminUser = userRepo().create({
+        name,
+        email,
+        password: hashedPassword,
+        department,
+        role: 'admin',
+        isActive: true
+      });
+
+      const saved = await userRepo().save(adminUser);
+
+      res.status(201).json({
+        id: saved.id,
+        name: saved.name,
+        email: saved.email,
+        role: saved.role,
+        department: saved.department
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 export default authRouter;
-
-// 認証ミドルウェア
-export const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ message: '認証が必要です' });
-  }
-
-  const token = authHeader.split(' ')[1];
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number; role: string };
-    (req as any).user = decoded;
-    next();
-  } catch {
-    return res.status(401).json({ message: 'トークンが無効です' });
-  }
-};
-
-// 管理者チェックミドルウェア
-export const adminMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  const user = (req as any).user;
-  if (!user || (user.role !== 'admin' && user.role !== 'system_admin')) {
-    return res.status(403).json({ message: '管理者権限が必要です' });
-  }
-  next();
-};

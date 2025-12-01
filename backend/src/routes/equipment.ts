@@ -17,7 +17,8 @@ equipmentRouter.get('/', async (req, res, next) => {
 
     const queryBuilder = equipmentRepo()
       .createQueryBuilder('equipment')
-      .leftJoinAndSelect('equipment.category', 'category');
+      .leftJoinAndSelect('equipment.category', 'category')
+      .where('equipment.isDeleted = :isDeleted', { isDeleted: false });
 
     // 検索フィルタ
     if (search) {
@@ -34,8 +35,8 @@ equipmentRouter.get('/', async (req, res, next) => {
       });
     }
 
-    // アクティブ状態フィルタ（デフォルトはアクティブのみ）
-    if (isActive === undefined || isActive === 'true') {
+    // アクティブ状態フィルタ
+    if (isActive === 'true') {
       queryBuilder.andWhere('equipment.isActive = :isActive', {
         isActive: true
       });
@@ -44,7 +45,7 @@ equipmentRouter.get('/', async (req, res, next) => {
         isActive: false
       });
     }
-    // isActive === 'all' の場合はフィルタなし
+    // isActive が undefined や 'all' の場合は isDeleted=false のみでフィルタ
 
     // ページネーション
     const skip = (Number(page) - 1) * Number(limit);
@@ -172,7 +173,8 @@ equipmentRouter.delete('/:id', async (req, res, next) => {
       return res.status(404).json({ message: '資機材が見つかりません' });
     }
 
-    // 論理削除（isActiveをfalseに）
+    // 論理削除（isDeletedをtrueにし、予約には使えないようにisActiveもfalseに）
+    equipment.isDeleted = true;
     equipment.isActive = false;
     await equipmentRepo().save(equipment);
 
@@ -188,12 +190,27 @@ equipmentRouter.delete('/:id', async (req, res, next) => {
 equipmentRouter.get('/categories/list', async (_req, res, next) => {
   try {
     const categories = await categoryRepo().find({
-      relations: ['equipments'],
-      order: { name: 'ASC' }
+      relations: ['equipments']
+    });
+
+    // 表示順: 蘇生講習資機材 → トレーニング資機材 → 機械類 → 消耗品 → その他 → それ以外（名前順）
+    const ORDER = ['蘇生講習資機材', 'トレーニング資機材', '機械類', '消耗品', 'その他'];
+
+    const sorted = categories.sort((a, b) => {
+      const ia = ORDER.indexOf(a.name);
+      const ib = ORDER.indexOf(b.name);
+
+      if (ia === -1 && ib === -1) {
+        // 両方とも定義外の場合は名前順
+        return a.name.localeCompare(b.name, 'ja');
+      }
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
     });
 
     // 各カテゴリの資機材数を追加
-    const result = categories.map((cat) => ({
+    const result = sorted.map((cat) => ({
       ...cat,
       equipmentCount: cat.equipments?.length || 0,
       equipments: undefined // 詳細は含めない

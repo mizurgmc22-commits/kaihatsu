@@ -7,7 +7,11 @@ import Login from './pages/auth/Login';
 import ReservationCalendar from './pages/reservations/ReservationCalendar';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import ReservationManagement from './pages/admin/ReservationManagement';
+import AdminCalendar from './pages/admin/AdminCalendar';
+import AdminGantt from './pages/admin/AdminGantt';
 import EquipmentList from './pages/equipment/EquipmentList';
+import EquipmentByCategory from './pages/equipment/EquipmentByCategory';
+import AdminSettings from './pages/admin/AdminSettings';
 
 function App() {
   return (
@@ -28,7 +32,11 @@ function App() {
         }>
           <Route index element={<AdminDashboard />} />
           <Route path="reservations" element={<ReservationManagement />} />
+          <Route path="calendar" element={<AdminCalendar />} />
+          <Route path="gantt" element={<AdminGantt />} />
           <Route path="equipment" element={<EquipmentList />} />
+          <Route path="equipment-by-category" element={<EquipmentByCategory />} />
+          <Route path="settings" element={<AdminSettings />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

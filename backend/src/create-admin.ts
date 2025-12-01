@@ -10,23 +10,23 @@ async function createAdmin() {
 
   // 既存の管理者をチェック
   const existingAdmin = await userRepo.findOne({ 
-    where: { email: 'admin@example.com' } 
+    where: { email: 'admin@sazan-with.local' } 
   });
 
   if (existingAdmin) {
     console.log('管理者ユーザーは既に存在します');
-    console.log('Email: admin@example.com');
+    console.log('Email: admin@sazan-with.local');
     await AppDataSource.destroy();
     return;
   }
 
   // パスワードをハッシュ化
-  const hashedPassword = await bcrypt.hash('admin123', 10);
+  const hashedPassword = await bcrypt.hash('Sazan-Admin@2025', 10);
 
   // 管理者ユーザーを作成
   const admin = userRepo.create({
     name: '管理者',
-    email: 'admin@example.com',
+    email: 'admin@sazan-with.local',
     password: hashedPassword,
     department: 'システム管理',
     role: 'admin',
@@ -37,8 +37,8 @@ async function createAdmin() {
 
   console.log('管理者ユーザーを作成しました');
   console.log('================================');
-  console.log('Email: admin@example.com');
-  console.log('Password: admin123');
+  console.log('Email: admin@sazan-with.local');
+  console.log('Password: Sazan-Admin@2025');
   console.log('================================');
 
   await AppDataSource.destroy();

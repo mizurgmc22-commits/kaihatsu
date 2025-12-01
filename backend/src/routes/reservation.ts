@@ -47,13 +47,13 @@ async function checkAvailability(
   requestedQuantity: number,
   excludeReservationId?: number
 ): Promise<{ available: boolean; remainingQuantity: number; totalQuantity: number; isUnlimited: boolean }> {
-  const equipment = await equipmentRepo().findOne({ where: { id: equipmentId } });
+  const equipment = await equipmentRepo().findOne({ where: { id: equipmentId, isDeleted: false }, relations: ['category'] });
   if (!equipment || !equipment.isActive) {
     return { available: false, remainingQuantity: 0, totalQuantity: 0, isUnlimited: false };
   }
 
-  // 無制限の場合は常に予約可能
-  if (equipment.isUnlimited) {
+  // 無制限 or 消耗品カテゴリの場合は常に予約可能
+  if (equipment.isUnlimited || equipment.category?.name === '消耗品') {
     return {
       available: true,
       remainingQuantity: -1, // -1 = 無制限
@@ -190,7 +190,8 @@ reservationRouter.get('/available', async (req, res, next) => {
     const queryBuilder = equipmentRepo()
       .createQueryBuilder('equipment')
       .leftJoinAndSelect('equipment.category', 'category')
-      .where('equipment.isActive = :isActive', { isActive: true });
+      .where('equipment.isDeleted = :isDeleted', { isDeleted: false })
+      .andWhere('equipment.isActive = :isActive', { isActive: true });
 
     if (categoryId) {
       queryBuilder.andWhere('equipment.categoryId = :categoryId', {
@@ -200,18 +201,45 @@ reservationRouter.get('/available', async (req, res, next) => {
 
     const equipments = await queryBuilder.orderBy('equipment.name', 'ASC').getMany();
 
-    // 各機器の予約状況を取得
-    const result = await Promise.all(
-      equipments.map(async (equipment) => {
-        const availability = await checkAvailability(equipment.id, startOfDay, endOfDay, 1);
-        return {
-          ...equipment,
-          remainingQuantity: availability.remainingQuantity,
-          isAvailable: availability.isUnlimited || availability.remainingQuantity > 0,
-          isUnlimited: availability.isUnlimited
-        };
-      })
-    );
+    const limitedEquipmentIds = equipments
+      .filter((equipment) => !equipment.isUnlimited && equipment.category?.name !== '消耗品')
+      .map((equipment) => equipment.id);
+
+    let reservedMap: Record<number, number> = {};
+
+    if (limitedEquipmentIds.length > 0) {
+      const reservationSums = await reservationRepo()
+        .createQueryBuilder('reservation')
+        .select('reservation.equipmentId', 'equipmentId')
+        .addSelect('COALESCE(SUM(reservation.quantity), 0)', 'reservedQuantity')
+        .where('reservation.equipmentId IN (:...equipmentIds)', { equipmentIds: limitedEquipmentIds })
+        .andWhere('reservation.status IN (:...statuses)', {
+          statuses: [ReservationStatus.PENDING, ReservationStatus.APPROVED]
+        })
+        .andWhere('reservation.startTime < :endOfDay AND reservation.endTime > :startOfDay', {
+          startOfDay,
+          endOfDay
+        })
+        .groupBy('reservation.equipmentId')
+        .getRawMany();
+
+      reservedMap = reservationSums.reduce<Record<number, number>>((acc, row) => {
+        acc[row.equipmentId] = Number(row.reservedQuantity) || 0;
+        return acc;
+      }, {});
+    }
+
+    const result = equipments.map((equipment) => {
+      const isUnlimited = equipment.isUnlimited || equipment.category?.name === '消耗品';
+      const reservedQuantity = isUnlimited ? 0 : reservedMap[equipment.id] || 0;
+      const remainingQuantity = isUnlimited ? -1 : equipment.quantity - reservedQuantity;
+      return {
+        ...equipment,
+        remainingQuantity,
+        isAvailable: isUnlimited || remainingQuantity > 0,
+        isUnlimited
+      };
+    });
 
     res.json(result);
   } catch (error) {
@@ -232,7 +260,7 @@ reservationRouter.get('/calendar/:equipmentId', async (req, res, next) => {
     const startDate = new Date(Number(year), Number(month) - 1, 1);
     const endDate = new Date(Number(year), Number(month), 0, 23, 59, 59, 999);
 
-    const equipment = await equipmentRepo().findOne({ where: { id: Number(equipmentId) } });
+    const equipment = await equipmentRepo().findOne({ where: { id: Number(equipmentId), isDeleted: false } });
     if (!equipment) {
       return res.status(404).json({ message: '機器が見つかりません' });
     }

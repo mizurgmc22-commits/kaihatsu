@@ -105,6 +105,8 @@ export default function ReservationCalendar() {
         <Heading size="lg">予約カレンダー</Heading>
         <HStack spacing={4}>
           <Select
+            aria-label="カテゴリフィルタ"
+            title="カテゴリフィルタ"
             placeholder="カテゴリで絞り込み"
             maxW="200px"
             value={categoryFilter}

@@ -33,6 +33,9 @@ export class Equipment {
   @Column({ default: false })
   isUnlimited!: boolean;
 
+  @Column({ default: false })
+  isDeleted!: boolean;
+
   @Column({ type: 'json', nullable: true })
   specifications?: Record<string, unknown>;
 

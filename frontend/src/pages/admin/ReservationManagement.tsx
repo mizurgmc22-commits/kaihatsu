@@ -98,13 +98,27 @@ export default function ReservationManagement() {
 
   return (
     <Box>
-      <Heading size="lg" mb={6}>予約管理</Heading>
+      <Flex justify="space-between" align="center" mb={6}>
+        <Heading size="lg">予約管理</Heading>
+        <Button
+          colorScheme="blue"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            // TODO: CSVエクスポートAPIと接続
+          }}
+        >
+          CSVダウンロード
+        </Button>
+      </Flex>
 
       {/* フィルター */}
       <Card mb={6}>
         <CardBody>
           <HStack spacing={4}>
             <Select
+              aria-label="ステータスフィルタ"
+              title="ステータスフィルタ"
               placeholder="すべてのステータス"
               value={statusFilter}
               onChange={(e) => {

@@ -79,6 +79,8 @@ export default function AvailableEquipmentModal({
         <ModalBody pb={6}>
           <Box mb={4}>
             <Select
+              aria-label="カテゴリフィルタ"
+              title="カテゴリフィルタ"
               placeholder="すべてのカテゴリ"
               value={categoryFilter}
               onChange={(e) => onCategoryChange(e.target.value)}
