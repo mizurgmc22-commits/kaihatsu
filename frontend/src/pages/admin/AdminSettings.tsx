@@ -65,6 +65,7 @@ const formatDate = (value?: string) => {
 export default function AdminSettings() {
   const [formState, setFormState] = useState<AdminForm>(initialForm);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [deletingAdminId, setDeletingAdminId] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -73,6 +74,33 @@ export default function AdminSettings() {
     queryFn: async () => {
       const response = await apiClient.get<AdminUser[]>('/auth/admins');
       return response.data;
+    }
+  });
+
+  const deleteAdminMutation = useMutation({
+    mutationFn: async (adminId: number) => {
+      await apiClient.delete(`/auth/admins/${adminId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admins'] });
+      toast({
+        title: '管理者を削除しました',
+        status: 'success',
+        duration: 3000,
+        isClosable: true
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: '削除に失敗しました',
+        description: error.response?.data?.message || '時間をおいて再度お試しください',
+        status: 'error',
+        duration: 4000,
+        isClosable: true
+      });
+    },
+    onSettled: () => {
+      setDeletingAdminId(null);
     }
   });
 
@@ -109,6 +137,14 @@ export default function AdminSettings() {
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     createAdminMutation.mutate(formState);
+  };
+
+  const handleDeleteAdmin = (admin: AdminUser) => {
+    const confirmDelete = window.confirm(`${admin.name} さんを削除しますか？`);
+    if (!confirmDelete) return;
+
+    setDeletingAdminId(admin.id);
+    deleteAdminMutation.mutate(admin.id);
   };
 
   const isSubmitDisabled =
@@ -153,6 +189,7 @@ export default function AdminSettings() {
                         <Th>部署</Th>
                         <Th>権限</Th>
                         <Th>最終ログイン</Th>
+                        <Th textAlign="right">操作</Th>
                       </Tr>
                     </Thead>
                     <Tbody>
@@ -174,6 +211,17 @@ export default function AdminSettings() {
                             </Badge>
                           </Td>
                           <Td>{formatDate(admin.lastLoginAt)}</Td>
+                          <Td textAlign="right">
+                            <Button
+                              size="sm"
+                              colorScheme="red"
+                              variant="outline"
+                              onClick={() => handleDeleteAdmin(admin)}
+                              isLoading={deletingAdminId === admin.id && deleteAdminMutation.isPending}
+                            >
+                              削除
+                            </Button>
+                          </Td>
                         </Tr>
                       ))}
                     </Tbody>

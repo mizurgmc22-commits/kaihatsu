@@ -26,6 +26,7 @@ export default function ReservationCalendar() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [selectedEquipment, setSelectedEquipment] = useState<AvailableEquipment | null>(null);
+  const [customEquipmentName, setCustomEquipmentName] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
   const calendarRef = useRef<FullCalendar>(null);
   const queryClient = useQueryClient();
@@ -88,15 +89,28 @@ export default function ReservationCalendar() {
 
   // 機器選択時
   const handleEquipmentSelect = (equipment: AvailableEquipment) => {
+    setCustomEquipmentName(null);
     setSelectedEquipment(equipment);
     onEquipmentModalClose();
     onFormModalOpen();
   };
 
-  // 予約完了時
-  const handleReservationComplete = () => {
+  const handleCustomReserve = (name: string) => {
+    setSelectedEquipment(null);
+    setCustomEquipmentName(name);
+    onEquipmentModalClose();
+    onFormModalOpen();
+  };
+
+  const handleFormModalClose = () => {
     onFormModalClose();
     setSelectedEquipment(null);
+    setCustomEquipmentName(null);
+  };
+
+  // 予約完了時
+  const handleReservationComplete = () => {
+    handleFormModalClose();
     // カレンダーイベントを再取得
     queryClient.invalidateQueries({ queryKey: ['calendarEvents'] });
   };
@@ -177,15 +191,17 @@ export default function ReservationCalendar() {
         categoryFilter={categoryFilter}
         onCategoryChange={setCategoryFilter}
         categories={categories || []}
+        onCustomReserve={handleCustomReserve}
       />
 
       {/* 予約フォームモーダル */}
       <ReservationFormModal
         isOpen={isFormModalOpen}
-        onClose={onFormModalClose}
+        onClose={handleFormModalClose}
         equipment={selectedEquipment}
         selectedDate={selectedDate}
         onComplete={handleReservationComplete}
+        customEquipmentName={customEquipmentName}
       />
 
       <style>{`

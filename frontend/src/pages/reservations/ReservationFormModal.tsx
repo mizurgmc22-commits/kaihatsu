@@ -39,6 +39,7 @@ interface Props {
   equipment: AvailableEquipment | null;
   selectedDate: string | null;
   onComplete: () => void;
+  customEquipmentName: string | null;
 }
 
 interface FormData {
@@ -53,6 +54,7 @@ interface FormData {
   purpose: string;
   location: string;
   notes: string;
+  customEquipmentName: string;
 }
 
 export default function ReservationFormModal({
@@ -60,7 +62,8 @@ export default function ReservationFormModal({
   onClose,
   equipment,
   selectedDate,
-  onComplete
+  onComplete,
+  customEquipmentName
 }: Props) {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -84,12 +87,13 @@ export default function ReservationFormModal({
       quantity: 1,
       purpose: '',
       location: '',
-      notes: ''
+      notes: '',
+      customEquipmentName: ''
     }
   });
 
   const watchQuantity = watch('quantity');
-  const watchEndDate = watch('endDate');
+  const watchCustomEquipmentName = watch('customEquipmentName');
 
   // フォームリセット
   useEffect(() => {
@@ -105,10 +109,11 @@ export default function ReservationFormModal({
         quantity: 1,
         purpose: '',
         location: '',
-        notes: ''
+        notes: '',
+        customEquipmentName: customEquipmentName || ''
       });
     }
-  }, [isOpen, selectedDate, reset]);
+  }, [isOpen, selectedDate, customEquipmentName, reset]);
 
   // 予約作成
   const createMutation = useMutation({
@@ -135,10 +140,16 @@ export default function ReservationFormModal({
   });
 
   const onSubmit = (data: FormData) => {
-    if (!equipment) return;
+    if (!equipment && !data.customEquipmentName.trim()) {
+      toast({
+        title: '機器名を入力してください',
+        status: 'error',
+        duration: 3000
+      });
+      return;
+    }
 
     const reservationData: ReservationInput = {
-      equipmentId: equipment.id,
       department: data.department,
       applicantName: data.applicantName,
       contactInfo: data.contactInfo,
@@ -149,6 +160,12 @@ export default function ReservationFormModal({
       location: data.location || undefined,
       notes: data.notes || undefined
     };
+
+    if (equipment) {
+      reservationData.equipmentId = equipment.id;
+    } else {
+      reservationData.customEquipmentName = data.customEquipmentName.trim();
+    }
 
     createMutation.mutate(reservationData);
   };
@@ -163,10 +180,9 @@ export default function ReservationFormModal({
     });
   };
 
-  if (!equipment) return null;
-
-  // 無制限の場合は数量超過チェックをスキップ
-  const isQuantityExceeded = !equipment.isUnlimited && watchQuantity > equipment.remainingQuantity;
+  const isQuantityExceeded = equipment
+    ? !equipment.isUnlimited && watchQuantity > equipment.remainingQuantity
+    : false;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="lg">
@@ -179,23 +195,35 @@ export default function ReservationFormModal({
           <ModalBody>
             <VStack spacing={4} align="stretch">
               {/* 機器情報 */}
-              <Box p={4} bg="blue.50" borderRadius="md">
-                <HStack justify="space-between">
-                  <Box>
-                    <Text fontWeight="bold" fontSize="lg">
-                      {equipment.name}
-                    </Text>
-                    <Text fontSize="sm" color="gray.600">
-                      {equipment.category?.name || '未分類'}
-                    </Text>
-                  </Box>
-                  {!equipment.isUnlimited && (
-                    <Badge colorScheme="green" fontSize="md" px={3} py={1}>
-                      残り {equipment.remainingQuantity}
-                    </Badge>
-                  )}
-                </HStack>
-              </Box>
+              {equipment ? (
+                <Box p={4} bg="blue.50" borderRadius="md">
+                  <HStack justify="space-between">
+                    <Box>
+                      <Text fontWeight="bold" fontSize="lg">
+                        {equipment.name}
+                      </Text>
+                      <Text fontSize="sm" color="gray.600">
+                        {equipment.category?.name || '未分類'}
+                      </Text>
+                    </Box>
+                    {!equipment.isUnlimited && (
+                      <Badge colorScheme="green" fontSize="md" px={3} py={1}>
+                        残り {equipment.remainingQuantity}
+                      </Badge>
+                    )}
+                  </HStack>
+                </Box>
+              ) : (
+                <Box p={4} bg="purple.50" borderRadius="md">
+                  <FormControl isRequired>
+                    <FormLabel>予約機器名</FormLabel>
+                    <Input
+                      placeholder="予約したい機器名を入力"
+                      {...register('customEquipmentName', { required: '機器名は必須です' })}
+                    />
+                  </FormControl>
+                </Box>
+              )}
 
               {/* 申請者情報 */}
               <FormControl isRequired>
@@ -279,12 +307,12 @@ export default function ReservationFormModal({
                   rules={{
                     required: true,
                     min: 1,
-                    max: equipment.isUnlimited ? undefined : equipment.remainingQuantity
+                    max: equipment?.isUnlimited ? undefined : equipment?.remainingQuantity
                   }}
                   render={({ field }) => (
                     <NumberInput
                       min={1}
-                      max={equipment.isUnlimited ? undefined : equipment.remainingQuantity}
+                      max={equipment?.isUnlimited ? undefined : equipment?.remainingQuantity}
                       value={field.value}
                       onChange={(_, val) => field.onChange(val || 1)}
                     >
@@ -296,7 +324,7 @@ export default function ReservationFormModal({
                     </NumberInput>
                   )}
                 />
-                {isQuantityExceeded && (
+                {isQuantityExceeded && equipment && (
                   <Alert status="error" mt={2} size="sm">
                     <AlertIcon />
                     予約可能数を超えています（最大: {equipment.remainingQuantity}）

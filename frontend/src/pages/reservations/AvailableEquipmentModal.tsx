@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import {
   Modal,
   ModalOverlay,
@@ -14,7 +15,10 @@ import {
   Select,
   Spinner,
   Flex,
-  Divider
+  Divider,
+  Input,
+  FormControl,
+  FormLabel
 } from '@chakra-ui/react';
 import type { AvailableEquipment } from '../../types/reservation';
 import type { EquipmentCategory } from '../../types/equipment';
@@ -29,6 +33,7 @@ interface Props {
   categoryFilter: string;
   onCategoryChange: (value: string) => void;
   categories: EquipmentCategory[];
+  onCustomReserve: (name: string) => void;
 }
 
 export default function AvailableEquipmentModal({
@@ -40,8 +45,10 @@ export default function AvailableEquipmentModal({
   onSelect,
   categoryFilter,
   onCategoryChange,
-  categories
+  categories,
+  onCustomReserve
 }: Props) {
+  const [customName, setCustomName] = useState('');
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
@@ -65,6 +72,34 @@ export default function AvailableEquipmentModal({
       return <Badge colorScheme="yellow">残り{item.remainingQuantity}</Badge>;
     }
     return <Badge colorScheme="green">予約可能（残り{item.remainingQuantity}）</Badge>;
+  };
+
+  const CATEGORY_ORDER = ['蘇生講習資機材', 'トレーニング資機材', '機械類', '消耗品', 'その他'];
+
+  const groupedEquipment = useMemo(() => {
+    const map: Record<string, AvailableEquipment[]> = {};
+    equipment.forEach((item) => {
+      const key = item.category?.name || '未分類';
+      if (!map[key]) {
+        map[key] = [];
+      }
+      map[key].push(item);
+    });
+    return map;
+  }, [equipment]);
+
+  const orderedCategoryNames = useMemo(() => {
+    const present = Object.keys(groupedEquipment);
+    const ordered = CATEGORY_ORDER.filter((name) => present.includes(name));
+    const rest = present.filter((name) => !CATEGORY_ORDER.includes(name)).sort((a, b) => a.localeCompare(b, 'ja'));
+    return [...ordered, ...rest];
+  }, [groupedEquipment]);
+
+  const handleCustomReserve = () => {
+    const trimmed = customName.trim();
+    if (!trimmed) return;
+    onCustomReserve(trimmed);
+    setCustomName('');
   };
 
   return (
@@ -105,49 +140,75 @@ export default function AvailableEquipmentModal({
               予約可能な機器がありません
             </Text>
           ) : (
-            <VStack spacing={3} align="stretch">
-              {equipment.map((item) => (
-                <Box
-                  key={item.id}
-                  p={4}
-                  borderWidth="1px"
-                  borderRadius="md"
-                  bg={item.isAvailable ? 'white' : 'gray.50'}
-                  opacity={item.isAvailable ? 1 : 0.7}
-                  _hover={item.isAvailable ? { borderColor: 'blue.300', shadow: 'sm' } : {}}
-                  transition="all 0.2s"
-                >
-                  <Flex justify="space-between" align="start">
-                    <Box flex="1">
-                      <HStack mb={1}>
-                        <Text fontWeight="bold">{item.name}</Text>
-                        {getAvailabilityBadge(item)}
-                      </HStack>
-                      <Text fontSize="sm" color="gray.600">
-                        {item.category?.name || '未分類'}
-                      </Text>
-                      {item.location && (
-                        <Text fontSize="sm" color="gray.500">
-                          保管場所: {item.location}
-                        </Text>
-                      )}
-                      {!item.isUnlimited && (
-                        <Text fontSize="sm" color="gray.500">
-                          保有数: {item.quantity} / 残り: {item.remainingQuantity}
-                        </Text>
-                      )}
-                    </Box>
-                    <Button
-                      colorScheme="blue"
-                      size="sm"
-                      isDisabled={!item.isAvailable}
-                      onClick={() => onSelect(item)}
-                    >
-                      予約する
-                    </Button>
-                  </Flex>
+            <VStack spacing={6} align="stretch">
+              {orderedCategoryNames.map((categoryName) => (
+                <Box key={categoryName}>
+                  <HStack justify="space-between" mb={2}>
+                    <Text fontWeight="bold">{categoryName}</Text>
+                    <Badge colorScheme="blue">{groupedEquipment[categoryName]?.length ?? 0} 件</Badge>
+                  </HStack>
+                  <VStack spacing={3} align="stretch">
+                    {groupedEquipment[categoryName]?.map((item) => (
+                      <Box
+                        key={item.id}
+                        p={4}
+                        borderWidth="1px"
+                        borderRadius="md"
+                        bg={item.isAvailable ? 'white' : 'gray.50'}
+                        opacity={item.isAvailable ? 1 : 0.7}
+                        _hover={item.isAvailable ? { borderColor: 'blue.300', shadow: 'sm' } : {}}
+                        transition="all 0.2s"
+                      >
+                        <Flex justify="space-between" align="start">
+                          <Box flex="1">
+                            <HStack mb={1}>
+                              <Text fontWeight="bold">{item.name}</Text>
+                              {getAvailabilityBadge(item)}
+                            </HStack>
+                            {item.location && (
+                              <Text fontSize="sm" color="gray.500">
+                                保管場所: {item.location}
+                              </Text>
+                            )}
+                            {!item.isUnlimited && (
+                              <Text fontSize="sm" color="gray.500">
+                                保有数: {item.quantity} / 残り: {item.remainingQuantity}
+                              </Text>
+                            )}
+                          </Box>
+                          <Button
+                            colorScheme="blue"
+                            size="sm"
+                            isDisabled={!item.isAvailable}
+                            onClick={() => onSelect(item)}
+                          >
+                            予約する
+                          </Button>
+                        </Flex>
+                      </Box>
+                    ))}
+                  </VStack>
                 </Box>
               ))}
+
+              <Box borderWidth="1px" borderRadius="md" p={4} bg="gray.50">
+                <FormControl>
+                  <FormLabel fontWeight="bold">その他の機器を予約する</FormLabel>
+                  <Text fontSize="sm" color="gray.600" mb={2}>
+                    予約したい機器名を直接入力してください。
+                  </Text>
+                  <HStack spacing={3} align="flex-end">
+                    <Input
+                      placeholder="例: 新規トレーニング機器"
+                      value={customName}
+                      onChange={(e) => setCustomName(e.target.value)}
+                    />
+                    <Button colorScheme="blue" onClick={handleCustomReserve} isDisabled={!customName.trim()}>
+                      予約する
+                    </Button>
+                  </HStack>
+                </FormControl>
+              </Box>
             </VStack>
           )}
         </ModalBody>

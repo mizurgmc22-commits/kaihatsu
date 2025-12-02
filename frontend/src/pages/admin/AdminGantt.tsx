@@ -41,6 +41,8 @@ interface EquipmentTimeline {
   events: TimelineEvent[];
   laneCount: number;
   categoryName: string;
+  maxUnits: number;
+  reservationCount: number;
 }
 
 interface EquipmentCategoryGroup {
@@ -73,6 +75,8 @@ const LEFT_COL_WIDTH = 240;
 const DAY_CELL_WIDTH = 56;
 const LANE_HEIGHT = 40;
 const TRACK_VERTICAL_PADDING = 24;
+const TIMELINE_SCROLLBAR_HEIGHT = 14;
+const DATE_HEADER_HEIGHT = 56;
 
 const weekdayFormatter = new Intl.DateTimeFormat('ja-JP', { weekday: 'short' });
 
@@ -123,7 +127,18 @@ export default function AdminGantt() {
       return { events: [], laneCount: 1 };
     }
 
-    const sorted = list
+    const expandedEvents = list.flatMap((event) => {
+      const quantity = Math.max(Number(event.extendedProps?.quantity) || 1, 1);
+      if (quantity <= 1) {
+        return [event];
+      }
+      return Array.from({ length: quantity }, (_, idx) => ({
+        ...event,
+        id: `${event.id}-unit-${idx + 1}`
+      }));
+    });
+
+    const sorted = expandedEvents
       .slice()
       .sort((a, b) => parseISO(a.start).getTime() - parseISO(b.start).getTime());
 
@@ -170,7 +185,9 @@ export default function AdminGantt() {
         equipmentName,
         events: timelineEvents,
         laneCount,
-        categoryName
+        categoryName,
+        maxUnits: Math.max(equipment.quantity ?? 1, 1),
+        reservationCount: eventList.length
       });
       remainingEvents.delete(equipmentName);
     });
@@ -181,7 +198,9 @@ export default function AdminGantt() {
         equipmentName,
         events: timelineEvents,
         laneCount,
-        categoryName: DEFAULT_CATEGORY_NAME
+        categoryName: DEFAULT_CATEGORY_NAME,
+        maxUnits: 1,
+        reservationCount: list.length
       });
     });
 
@@ -254,7 +273,7 @@ export default function AdminGantt() {
 
     let isSyncing = false;
 
-    const syncScroll = (source: HTMLDivElement, target: HTMLDivElement) => () => {
+    const sync = (source: HTMLDivElement, target: HTMLDivElement) => () => {
       if (isSyncing) return;
       isSyncing = true;
       target.scrollLeft = source.scrollLeft;
@@ -263,15 +282,14 @@ export default function AdminGantt() {
       });
     };
 
-    const handleTopScroll = syncScroll(top, main);
-    const handleMainScroll = syncScroll(main, top);
-
-    top.addEventListener('scroll', handleTopScroll, { passive: true });
-    main.addEventListener('scroll', handleMainScroll, { passive: true });
+    const handleTop = sync(top, main);
+    const handleMain = sync(main, top);
+    top.addEventListener('scroll', handleTop, { passive: true });
+    main.addEventListener('scroll', handleMain, { passive: true });
 
     return () => {
-      top.removeEventListener('scroll', handleTopScroll);
-      main.removeEventListener('scroll', handleMainScroll);
+      top.removeEventListener('scroll', handleTop);
+      main.removeEventListener('scroll', handleMain);
     };
   }, [timelineContainerWidth]);
 
@@ -326,173 +344,185 @@ export default function AdminGantt() {
             <Text color="gray.500">該当期間の予約データがありません。</Text>
           </Flex>
         ) : (
-          <>
-            <Box
-              ref={topScrollRef}
-              overflowX="auto"
-              mb={2}
-              h="16px"
-              borderRadius="md"
-              bg="gray.50"
-            >
-              <Box minW={`${timelineContainerWidth}px`} h="1px" />
-            </Box>
-            <Box ref={mainScrollRef} overflowX="auto">
-              <Box minW={`${timelineContainerWidth}px`}>
-                <Grid templateColumns={`${LEFT_COL_WIDTH}px ${timelineTrackWidth}px`} gap={3} mb={3} alignItems="center">
-                  <GridItem>
-                    <Text fontSize="sm" color="gray.500" pl={2}>
-                      機器
-                    </Text>
-                  </GridItem>
-                  <GridItem>
-                    <Flex borderRadius="lg" overflow="hidden" border="1px solid" borderColor="gray.200">
-                      {timelineDays.map((day) => {
-                        const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-                        return (
-                          <Box
-                            key={day.toISOString()}
-                            w={`${DAY_CELL_WIDTH}px`}
-                            flex="0 0 auto"
-                            textAlign="center"
-                            py={2}
-                            bg={isWeekend ? 'gray.50' : 'white'}
-                          >
-                            <Text fontSize="xs" fontWeight="semibold" color={isWeekend ? 'red.400' : 'gray.700'}>
-                              {format(day, 'd')}
-                            </Text>
-                            <Text fontSize="xs" color="gray.500">
-                              {weekdayFormatter.format(day)}
-                            </Text>
-                          </Box>
-                        );
-                      })}
-                    </Flex>
-                  </GridItem>
-                </Grid>
+          <Flex>
+            {/* 左カラム: 機器情報（固定） */}
+            <Box flex={`0 0 ${LEFT_COL_WIDTH}px`} mr={4}>
+              {/* ヘッダスペーサー */}
+              <Box h="12px" mb={2} />
+              <Box h="52px" mb={3} display="flex" alignItems="center">
+                <Text fontSize="sm" color="gray.500" pl={2}>機器</Text>
+              </Box>
 
-                <Box display="flex" flexDirection="column" gap={8}>
+              {/* カテゴリ・機器リスト */}
+              {categoryGroups.map(({ categoryName, equipments }) => (
+                <Box key={`left-${categoryName}`} mb={6}>
+                  <Text fontWeight="bold" color="gray.700" mb={3}>{categoryName}</Text>
+                  <Box display="flex" flexDirection="column" gap={4}>
+                    {equipments.map(({ equipmentName, laneCount, maxUnits, reservationCount }) => {
+                      const accent = equipmentColorMap.get(equipmentName) ?? DEFAULT_CATEGORY_COLOR;
+                      const trackHeight = laneCount * LANE_HEIGHT + TRACK_VERTICAL_PADDING;
+                      return (
+                        <Box
+                          key={`left-${categoryName}-${equipmentName}`}
+                          borderRadius="xl"
+                          bg={hexToRgba(accent, 0.08)}
+                          borderLeftWidth="4px"
+                          borderColor={accent}
+                          p={3}
+                          height={`${trackHeight}px`}
+                          display="flex"
+                          flexDirection="column"
+                          justifyContent="center"
+                        >
+                          <Text fontWeight="semibold" color="gray.800" mb={1} noOfLines={1}>
+                            {equipmentName}
+                          </Text>
+                          <Text fontSize="xs" color="gray.500">
+                            予約 {reservationCount} 件 / 保有数 {maxUnits} 台
+                          </Text>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+
+            {/* 右カラム: タイムライン（横スクロール） */}
+            <Box flex="1" overflow="hidden">
+              {/* 上部スクロールバー */}
+              <Box ref={topScrollRef} overflowX="auto" h="12px" mb={2} borderRadius="full" bg="gray.100">
+                <Box minW={`${timelineTrackWidth}px`} h="4px" />
+              </Box>
+
+              {/* メインスクロールエリア */}
+              <Box ref={mainScrollRef} overflowX="auto">
+                <Box minW={`${timelineTrackWidth}px`}>
+                  {/* 日付ヘッダ */}
+                  <Flex
+                    borderRadius="lg"
+                    overflow="hidden"
+                    border="1px solid"
+                    borderColor="gray.200"
+                    mb={3}
+                  >
+                    {timelineDays.map((day) => {
+                      const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+                      return (
+                        <Box
+                          key={day.toISOString()}
+                          w={`${DAY_CELL_WIDTH}px`}
+                          flex="0 0 auto"
+                          textAlign="center"
+                          py={2}
+                          bg={isWeekend ? 'gray.50' : 'white'}
+                        >
+                          <Text fontSize="xs" fontWeight="semibold" color={isWeekend ? 'red.400' : 'gray.700'}>
+                            {format(day, 'd')}
+                          </Text>
+                          <Text fontSize="xs" color="gray.500">
+                            {weekdayFormatter.format(day)}
+                          </Text>
+                        </Box>
+                      );
+                    })}
+                  </Flex>
+
+                  {/* カテゴリ・タイムライン */}
                   {categoryGroups.map(({ categoryName, equipments }) => (
-                    <Box key={categoryName}>
-                      <Text fontWeight="bold" color="gray.700" mb={3}>
-                        {categoryName}
-                      </Text>
+                    <Box key={`timeline-${categoryName}`} mb={6}>
+                      <Box h="24px" mb={3} />
                       <Box display="flex" flexDirection="column" gap={4}>
                         {equipments.map(({ equipmentName, events: equipmentEvents, laneCount }) => {
                           const accent = equipmentColorMap.get(equipmentName) ?? DEFAULT_CATEGORY_COLOR;
-                          const trackBg = `repeating-linear-gradient(to right, rgba(226,232,240,0.6) 0px, rgba(226,232,240,0.6) 1px, transparent 1px, transparent ${DAY_CELL_WIDTH}px)`;
                           const trackHeight = laneCount * LANE_HEIGHT + TRACK_VERTICAL_PADDING;
+                          const trackBg = `repeating-linear-gradient(to right, rgba(226,232,240,0.6) 0px, rgba(226,232,240,0.6) 1px, transparent 1px, transparent ${DAY_CELL_WIDTH}px)`;
                           return (
-                            <Grid
-                              key={`${categoryName}-${equipmentName}`}
-                              templateColumns={`${LEFT_COL_WIDTH}px ${timelineTrackWidth}px`}
-                              gap={3}
-                              alignItems="stretch"
+                            <Box
+                              key={`timeline-${categoryName}-${equipmentName}`}
+                              position="relative"
+                              height={`${trackHeight}px`}
+                              borderRadius="xl"
+                              bg="white"
+                              border="1px solid"
+                              borderColor="gray.200"
+                              overflow="hidden"
+                              px={2}
+                              pt={3}
+                              pb={2}
+                              style={{ backgroundImage: trackBg }}
                             >
-                              <GridItem>
+                              {isTodayInRange && todayLeft !== null && (
                                 <Box
-                                  borderRadius="xl"
-                                  bg={hexToRgba(accent, 0.08)}
-                                  borderLeftWidth="4px"
-                                  borderColor={accent}
-                                  p={3}
-                                  h="100%"
-                                >
-                                  <Text fontWeight="semibold" color="gray.800" mb={1} noOfLines={1}>
-                                    {equipmentName}
-                                  </Text>
-                                  <Text fontSize="xs" color="gray.500">
-                                    予約 {equipmentEvents.length} 件 / 最大 {laneCount} 台同時使用
-                                  </Text>
-                                </Box>
-                              </GridItem>
-                              <GridItem>
-                                <Box
-                                  position="relative"
-                                  height={`${trackHeight}px`}
-                                  borderRadius="xl"
-                                  bg="white"
-                                  border="1px solid"
-                                  borderColor="gray.200"
-                                  overflow="hidden"
-                                  px={2}
-                                  pt={3}
-                                  pb={2}
-                                  style={{ backgroundImage: trackBg }}
-                                >
-                                  {isTodayInRange && todayLeft !== null && (
+                                  position="absolute"
+                                  top="6px"
+                                  bottom="6px"
+                                  left={`calc(${todayLeft}% - 1px)`}
+                                  width="2px"
+                                  bg="red.400"
+                                  borderRadius="full"
+                                />
+                              )}
+                              {equipmentEvents.map((event) => {
+                                const { left, width } = getBarPosition(event);
+                                const statusColor = statusColorMap[event.extendedProps.status] || accent;
+                                const topOffset = 12 + event.laneIndex * LANE_HEIGHT;
+                                return (
+                                  <Tooltip
+                                    key={`${equipmentName}-${event.id}`}
+                                    label={
+                                      <Box>
+                                        <Text fontWeight="bold" mb={1}>{event.title}</Text>
+                                        <Text fontSize="xs">部署: {event.extendedProps.department}</Text>
+                                        <Text fontSize="xs">数量: {event.extendedProps.quantity}</Text>
+                                        <Text fontSize="xs">
+                                          {format(parseISO(event.start), 'M/d HH:mm')} - {format(parseISO(event.end), 'M/d HH:mm')}
+                                        </Text>
+                                      </Box>
+                                    }
+                                  >
                                     <Box
                                       position="absolute"
-                                      top="6px"
-                                      bottom="6px"
-                                      left={`calc(${todayLeft}% - 1px)`}
-                                      width="2px"
-                                      bg="red.400"
+                                      top={`${topOffset}px`}
+                                      left={`${left}%`}
+                                      width={`${width}%`}
+                                      minW="64px"
+                                      height="34px"
                                       borderRadius="full"
-                                    />
-                                  )}
-                                  {equipmentEvents.map((event) => {
-                                    const { left, width } = getBarPosition(event);
-                                    const statusColor = statusColorMap[event.extendedProps.status] || accent;
-                                    const topOffset = 12 + event.laneIndex * LANE_HEIGHT;
-                                    return (
-                                      <Tooltip
-                                        key={`${equipmentName}-${event.id}`}
-                                        label={
-                                          <Box>
-                                            <Text fontWeight="bold" mb={1}>{event.title}</Text>
-                                            <Text fontSize="xs">部署: {event.extendedProps.department}</Text>
-                                            <Text fontSize="xs">数量: {event.extendedProps.quantity}</Text>
-                                            <Text fontSize="xs">
-                                              {format(parseISO(event.start), 'M/d HH:mm')} - {format(parseISO(event.end), 'M/d HH:mm')}
-                                            </Text>
-                                          </Box>
-                                        }
-                                      >
-                                        <Box
-                                          position="absolute"
-                                          top={`${topOffset}px`}
-                                          left={`${left}%`}
-                                          width={`${width}%`}
-                                          minW="64px"
-                                          height="34px"
+                                      bg={hexToRgba(statusColor, 0.9)}
+                                      boxShadow="0 6px 20px rgba(15, 23, 42, 0.15)"
+                                      display="flex"
+                                      alignItems="center"
+                                      px={3}
+                                      color="white"
+                                      fontSize="xs"
+                                      fontWeight="bold"
+                                      overflow="hidden"
+                                      whiteSpace="nowrap"
+                                      textOverflow="ellipsis"
+                                      border="1px solid"
+                                      borderColor={hexToRgba(statusColor, 0.3)}
+                                    >
+                                      <HStack spacing={2} align="center" width="100%">
+                                        <Badge
+                                          bg="white"
+                                          color={statusColor}
+                                          fontSize="0.65rem"
+                                          px={2}
                                           borderRadius="full"
-                                          bg={hexToRgba(statusColor, 0.9)}
-                                          boxShadow="0 6px 20px rgba(15, 23, 42, 0.15)"
-                                          display="flex"
-                                          alignItems="center"
-                                          px={3}
-                                          color="white"
-                                          fontSize="xs"
                                           fontWeight="bold"
-                                          overflow="hidden"
-                                          whiteSpace="nowrap"
-                                          textOverflow="ellipsis"
-                                          border="1px solid"
-                                          borderColor={hexToRgba(statusColor, 0.3)}
                                         >
-                                          <HStack spacing={2} align="center" width="100%">
-                                            <Badge
-                                              bg="white"
-                                              color={statusColor}
-                                              fontSize="0.65rem"
-                                              px={2}
-                                              borderRadius="full"
-                                              fontWeight="bold"
-                                            >
-                                              {event.laneIndex + 1}
-                                            </Badge>
-                                            <Text flex="1" noOfLines={1}>
-                                              {event.extendedProps.department}
-                                            </Text>
-                                          </HStack>
-                                        </Box>
-                                      </Tooltip>
-                                    );
-                                  })}
-                                </Box>
-                              </GridItem>
-                            </Grid>
+                                          {event.laneIndex + 1}
+                                        </Badge>
+                                        <Text flex="1" noOfLines={1}>
+                                          {event.extendedProps.department}
+                                        </Text>
+                                      </HStack>
+                                    </Box>
+                                  </Tooltip>
+                                );
+                              })}
+                            </Box>
                           );
                         })}
                       </Box>
@@ -501,7 +531,7 @@ export default function AdminGantt() {
                 </Box>
               </Box>
             </Box>
-          </>
+          </Flex>
         )}
       </Box>
     </Box>

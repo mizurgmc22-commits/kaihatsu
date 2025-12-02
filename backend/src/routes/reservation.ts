@@ -151,11 +151,11 @@ reservationRouter.get('/events', async (req, res, next) => {
     // FullCalendar用のイベント形式に変換
     const events = reservations.map((r) => ({
       id: String(r.id),
-      title: `${r.equipment.name} - ${r.department}`,
+      title: `${r.equipment?.name || r.customEquipmentName || '未設定'} - ${r.department}`,
       start: r.startTime,
       end: r.endTime,
       extendedProps: {
-        equipmentName: r.equipment.name,
+        equipmentName: r.equipment?.name || r.customEquipmentName || '未設定',
         department: r.department,
         applicantName: r.applicantName,
         quantity: r.quantity,
@@ -338,26 +338,27 @@ reservationRouter.get('/:id', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+}); // Close the route definition properly
 
 // 予約作成
 reservationRouter.post('/', async (req, res, next) => {
   try {
-    const { 
-      equipmentId, 
-      department, 
-      applicantName, 
+    const {
+      equipmentId,
+      customEquipmentName,
+      department,
+      applicantName,
       contactInfo,
-      startTime, 
-      endTime, 
-      quantity = 1, 
-      purpose, 
-      location, 
-      notes 
+      startTime,
+      endTime,
+      quantity = 1,
+      purpose,
+      location,
+      notes
     } = req.body;
 
-    if (!equipmentId || !startTime || !endTime) {
-      return res.status(400).json({ message: '機器ID、開始日時、終了日時は必須です' });
+    if ((!equipmentId && !customEquipmentName) || !startTime || !endTime) {
+      return res.status(400).json({ message: '機器または名称、開始日時、終了日時は必須です' });
     }
 
     if (!department || !applicantName || !contactInfo) {
@@ -371,21 +372,30 @@ reservationRouter.post('/', async (req, res, next) => {
       return res.status(400).json({ message: '終了日時は開始日時より後にしてください' });
     }
 
-    // 予約可能かチェック
-    const availability = await checkAvailability(equipmentId, start, end, quantity);
-    if (!availability.available) {
-      return res.status(400).json({
-        message: `予約可能数を超えています（残り: ${availability.remainingQuantity}）`
-      });
+    let equipment = null;
+    if (equipmentId) {
+      // 予約可能かチェック
+      const availability = await checkAvailability(equipmentId, start, end, quantity);
+      if (!availability.available) {
+        return res.status(400).json({
+          message: `予約可能数を超えています（残り: ${availability.remainingQuantity}）`
+        });
+      }
+
+      equipment = await equipmentRepo().findOne({ where: { id: equipmentId } });
+      if (!equipment) {
+        return res.status(404).json({ message: '機器が見つかりません' });
+      }
     }
 
-    const equipment = await equipmentRepo().findOne({ where: { id: equipmentId } });
-    if (!equipment) {
-      return res.status(404).json({ message: '機器が見つかりません' });
+    const trimmedCustomName = typeof customEquipmentName === 'string' ? customEquipmentName.trim() : undefined;
+    if (!equipment && !trimmedCustomName) {
+      return res.status(400).json({ message: 'その他予約の場合は名称を入力してください' });
     }
 
     const reservation = reservationRepo().create({
-      equipment,
+      equipment: equipment ?? undefined,
+      customEquipmentName: equipment ? undefined : trimmedCustomName,
       department,
       applicantName,
       contactInfo,
@@ -421,7 +431,7 @@ reservationRouter.put('/:id', async (req, res, next) => {
     }
 
     // 日時・数量変更時は再チェック
-    if (startTime || endTime || quantity) {
+    if (reservation.equipment && (startTime || endTime || quantity)) {
       const newStart = startTime ? new Date(startTime) : reservation.startTime;
       const newEnd = endTime ? new Date(endTime) : reservation.endTime;
       const newQuantity = quantity ?? reservation.quantity;
@@ -443,6 +453,10 @@ reservationRouter.put('/:id', async (req, res, next) => {
       reservation.startTime = newStart;
       reservation.endTime = newEnd;
       reservation.quantity = newQuantity;
+    } else {
+      if (startTime) reservation.startTime = new Date(startTime);
+      if (endTime) reservation.endTime = new Date(endTime);
+      if (quantity) reservation.quantity = quantity;
     }
 
     if (purpose !== undefined) reservation.purpose = purpose;

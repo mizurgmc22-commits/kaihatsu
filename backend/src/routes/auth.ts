@@ -258,4 +258,44 @@ authRouter.post(
   }
 );
 
+// 管理者削除
+authRouter.delete(
+  '/admins/:id',
+  authMiddleware,
+  adminMiddleware,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const adminId = Number(req.params.id);
+      const requester = (req as any).user as User;
+
+      if (Number.isNaN(adminId)) {
+        return res.status(400).json({ message: '有効なIDを指定してください' });
+      }
+
+      if (requester.id === adminId) {
+        return res.status(400).json({ message: '自分自身は削除できません' });
+      }
+
+      const adminUser = await userRepo().findOne({ where: { id: adminId } });
+
+      if (!adminUser || (adminUser.role !== 'admin' && adminUser.role !== 'system_admin')) {
+        return res.status(404).json({ message: '管理者が見つかりません' });
+      }
+
+      if (adminUser.role === 'system_admin' && requester.role !== 'system_admin') {
+        return res.status(403).json({ message: 'システム管理者を削除する権限がありません' });
+      }
+
+      adminUser.isActive = false;
+      adminUser.deletedAt = new Date();
+
+      await userRepo().save(adminUser);
+
+      res.json({ message: '管理者を削除しました' });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 export default authRouter;

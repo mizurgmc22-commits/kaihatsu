@@ -170,7 +170,7 @@ export default function ReservationManagement() {
                   {data?.items.map((r) => (
                     <Tr key={r.id}>
                       <Td>{r.id}</Td>
-                      <Td>{r.equipment.name}</Td>
+                      <Td>{r.equipment?.name || r.customEquipmentName || '未設定'}</Td>
                       <Td>{r.department}</Td>
                       <Td>{r.applicantName}</Td>
                       <Td>{r.contactInfo}</Td>

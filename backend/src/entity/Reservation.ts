@@ -26,10 +26,13 @@ export class Reservation {
   user?: User;
 
   @ManyToOne(() => Equipment, (equipment) => equipment.reservations, {
-    nullable: false,
+    nullable: true,
     onDelete: 'CASCADE'
   })
-  equipment!: Equipment;
+  equipment?: Equipment | null;
+
+  @Column({ nullable: true })
+  customEquipmentName?: string;
 
   // 申請者情報
   @Column({ nullable: false })

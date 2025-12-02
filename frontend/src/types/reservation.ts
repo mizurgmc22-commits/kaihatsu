@@ -17,7 +17,8 @@ export interface User {
 
 export interface Reservation {
   id: number;
-  equipment: Equipment;
+  equipment?: Equipment | null;
+  customEquipmentName?: string;
   user?: User;
   department: string;
   applicantName: string;
@@ -34,7 +35,8 @@ export interface Reservation {
 }
 
 export interface ReservationInput {
-  equipmentId: number;
+  equipmentId?: number;
+  customEquipmentName?: string;
   department: string;
   applicantName: string;
   contactInfo: string;
