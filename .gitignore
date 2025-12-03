@@ -5,8 +5,9 @@ node_modules/
 dist/
 build/
 
-# Database
-*.sqlite
+# Database (data/フォルダ内のSQLiteは保持する)
+# *.sqlite
+backend/database.sqlite
 
 # Environment
 .env

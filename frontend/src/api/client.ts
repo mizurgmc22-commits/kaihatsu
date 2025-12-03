@@ -1,7 +1,11 @@
 import axios from 'axios';
 
+// 開発環境: Viteプロキシ経由で /api にアクセス（同一オリジン）
+// 本番環境: 環境変数で指定されたAPIサーバーにアクセス
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+
 export const apiClient = axios.create({
-  baseURL: 'http://localhost:3002/api',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
