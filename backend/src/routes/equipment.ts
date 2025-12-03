@@ -163,7 +163,7 @@ equipmentRouter.put('/:id', async (req, res, next) => {
   }
 });
 
-// 資機材削除（論理削除）
+// 資機材削除（論理削除扱いで無効化のみ）
 equipmentRouter.delete('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -173,8 +173,7 @@ equipmentRouter.delete('/:id', async (req, res, next) => {
       return res.status(404).json({ message: '資機材が見つかりません' });
     }
 
-    // 論理削除（isDeletedをtrueにし、予約には使えないようにisActiveもfalseに）
-    equipment.isDeleted = true;
+    // 論理削除扱い（レコードは保持し予約利用を止めるため非アクティブ化のみ）
     equipment.isActive = false;
     await equipmentRepo().save(equipment);
 
