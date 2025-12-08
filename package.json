@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "資機材予約システム - フロントエンド・バックエンド統合環境",
   "scripts": {
-    "dev": "concurrently -k -n \"API,WEB\" -c \"cyan,magenta\" \"npm run dev:backend\" \"npm run dev:frontend:wait\"",
+    "dev": "run-p dev:backend dev:frontend",
     "dev:backend": "npm run dev --prefix backend",
     "dev:frontend": "npm run dev --prefix frontend",
     "dev:frontend:wait": "wait-on http://localhost:3002/api/debug-routes && npm run dev:frontend",
