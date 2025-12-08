@@ -130,7 +130,7 @@ export default function ReservationCalendar() {
               placeholder="カテゴリで絞り込み"
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              bg="白"
+              bg="white"
             >
               {categories?.map((cat) => (
                 <option key={cat.id} value={cat.id}>
