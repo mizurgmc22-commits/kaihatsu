@@ -4,10 +4,10 @@
   "description": "Equipment reservation system backend",
   "main": "dist/server.js",
   "scripts": {
-    "start": "./node_modules/.bin/node dist/server.js",
-    "dev": "./node_modules/.bin/nodemon --exec ./node_modules/.bin/ts-node src/server.ts",
-    "build": "./node_modules/.bin/tsc",
-    "seed": "./node_modules/.bin/ts-node src/scripts/seed-data.ts",
+    "start": "node dist/server.js",
+    "dev": "nodemon --exec ts-node src/server.ts",
+    "build": "tsc",
+    "seed": "ts-node src/scripts/seed-data.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
