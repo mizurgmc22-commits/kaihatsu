@@ -4,7 +4,7 @@ import UserLayout from './components/UserLayout';
 import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/auth/Login';
-import ReservationCalendar from './pages/reservations/ReservationCalendar';
+import UserHome from './pages/reservations/UserHome';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import ReservationManagement from './pages/admin/ReservationManagement';
 import AdminCalendar from './pages/admin/AdminCalendar';
@@ -21,7 +21,7 @@ function App() {
         
         {/* ユーザー向け - 予約カレンダーのみ（認証不要） */}
         <Route path="/" element={<UserLayout />}>
-          <Route index element={<ReservationCalendar />} />
+          <Route index element={<UserHome />} />
         </Route>
 
         {/* 管理者向け（認証必須） */}

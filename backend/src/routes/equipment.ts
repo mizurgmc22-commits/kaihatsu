@@ -1,12 +1,83 @@
 import { Router } from 'express';
+import type { Request } from 'express';
 import AppDataSource from '../data-source';
 import { Equipment } from '../entity/Equipment';
 import { EquipmentCategory } from '../entity/EquipmentCategory';
-import { Like } from 'typeorm';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { EQUIPMENT_IMAGE_DIR, EQUIPMENT_IMAGE_PUBLIC_PATH } from '../config/upload';
 
 const equipmentRouter = Router();
 const equipmentRepo = () => AppDataSource.getRepository(Equipment);
 const categoryRepo = () => AppDataSource.getRepository(EquipmentCategory);
+
+type MulterRequest = Request & { file?: Express.Multer.File };
+
+const storage = multer.diskStorage({
+  destination: (_req: Request, _file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
+    cb(null, EQUIPMENT_IMAGE_DIR);
+  },
+  filename: (_req: Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_');
+    cb(null, `${timestamp}-${base}${ext}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+    if (!file.mimetype.startsWith('image/')) {
+      return cb(new Error('画像ファイルのみアップロードできます'));
+    }
+    cb(null, true);
+  }
+});
+
+const toNumber = (value: unknown): number | undefined => {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value === 'number') return value;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? undefined : parsed;
+};
+
+const toBoolean = (value: unknown): boolean | undefined => {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    return value.toLowerCase() === 'true';
+  }
+  return undefined;
+};
+
+const parseSpecifications = (value: unknown): Record<string, unknown> | undefined => {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value === 'object') return value as Record<string, unknown>;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+};
+
+const buildImageUrl = (filename: string) => `${EQUIPMENT_IMAGE_PUBLIC_PATH}/${filename}`;
+
+const removeImageFile = async (imageUrl?: string | null) => {
+  if (!imageUrl) return;
+  const filename = path.basename(imageUrl);
+  const filePath = path.join(EQUIPMENT_IMAGE_DIR, filename);
+  try {
+    await fs.promises.unlink(filePath);
+  } catch {
+    // ignore
+  }
+};
 
 // ========== 資機材 CRUD ==========
 
@@ -90,9 +161,11 @@ equipmentRouter.get('/:id', async (req, res, next) => {
 });
 
 // 資機材作成
-equipmentRouter.post('/', async (req, res, next) => {
+equipmentRouter.post('/', upload.single('image'), async (req, res, next) => {
   try {
-    const { name, description, quantity, location, categoryId, specifications } = req.body;
+    const { name, description, location, categoryId } = req.body;
+    const quantity = toNumber(req.body.quantity);
+    const specifications = parseSpecifications(req.body.specifications);
 
     if (!name || quantity === undefined) {
       return res.status(400).json({ message: '名称と保有数は必須です' });
@@ -106,9 +179,15 @@ equipmentRouter.post('/', async (req, res, next) => {
       specifications
     });
 
+    const file = (req as MulterRequest).file;
+    if (file) {
+      equipment.imageUrl = buildImageUrl(file.filename);
+    }
+
     // カテゴリ設定
-    if (categoryId) {
-      const category = await categoryRepo().findOne({ where: { id: categoryId } });
+    const parsedCategoryId = toNumber(categoryId);
+    if (parsedCategoryId) {
+      const category = await categoryRepo().findOne({ where: { id: parsedCategoryId } });
       if (category) {
         equipment.category = category;
       }
@@ -122,10 +201,14 @@ equipmentRouter.post('/', async (req, res, next) => {
 });
 
 // 資機材更新
-equipmentRouter.put('/:id', async (req, res, next) => {
+equipmentRouter.put('/:id', upload.single('image'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, description, quantity, location, isActive, categoryId, specifications } = req.body;
+    const { name, description, location, categoryId } = req.body;
+    const quantity = toNumber(req.body.quantity);
+    const isActive = toBoolean(req.body.isActive);
+    const specifications = parseSpecifications(req.body.specifications);
+    const removeImage = toBoolean(req.body.removeImage);
 
     const equipment = await equipmentRepo().findOne({
       where: { id: Number(id) },
@@ -146,14 +229,31 @@ equipmentRouter.put('/:id', async (req, res, next) => {
 
     // カテゴリ更新
     if (categoryId !== undefined) {
-      if (categoryId === null) {
+      if (categoryId === null || categoryId === '' || categoryId === 'null') {
         equipment.category = undefined;
       } else {
-        const category = await categoryRepo().findOne({ where: { id: categoryId } });
-        if (category) {
-          equipment.category = category;
+        const parsedCategoryId = toNumber(categoryId);
+        if (parsedCategoryId) {
+          const category = await categoryRepo().findOne({ where: { id: parsedCategoryId } });
+          if (category) {
+            equipment.category = category;
+          }
         }
       }
+    }
+
+    const file = (req as MulterRequest).file;
+
+    if (removeImage) {
+      await removeImageFile(equipment.imageUrl);
+      equipment.imageUrl = undefined;
+    }
+
+    if (file) {
+      if (!removeImage) {
+        await removeImageFile(equipment.imageUrl);
+      }
+      equipment.imageUrl = buildImageUrl(file.filename);
     }
 
     const saved = await equipmentRepo().save(equipment);

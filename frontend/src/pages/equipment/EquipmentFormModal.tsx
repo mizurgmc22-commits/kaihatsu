@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Modal,
   ModalOverlay,
@@ -21,7 +21,10 @@ import {
   VStack,
   Switch,
   FormHelperText,
-  useToast
+  useToast,
+  Image,
+  Checkbox,
+  Text
 } from '@chakra-ui/react';
 import { useForm, Controller } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -38,17 +41,30 @@ interface Props {
 export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditMode }: Props) {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  const { register, handleSubmit, control, reset, formState: { errors, isSubmitting } } = useForm<EquipmentInput>({
+  const {
+    register,
+    handleSubmit,
+    control,
+    reset,
+    watch,
+    setValue,
+    formState: { errors, isSubmitting }
+  } = useForm<EquipmentInput>({
     defaultValues: {
       name: '',
       description: '',
       quantity: 1,
       location: '',
       categoryId: undefined,
-      isActive: true
+      isActive: true,
+      imageFile: undefined,
+      removeImage: false
     }
   });
+
+  const watchImageFile = watch('imageFile');
 
   // カテゴリ一覧取得
   const { data: categories } = useQuery({
@@ -66,7 +82,9 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
           quantity: equipment.quantity,
           location: equipment.location || '',
           categoryId: equipment.category?.id,
-          isActive: equipment.isActive
+          isActive: equipment.isActive,
+          imageFile: undefined,
+          removeImage: false
         });
       } else {
         reset({
@@ -75,11 +93,59 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
           quantity: 1,
           location: '',
           categoryId: undefined,
-          isActive: true
+          isActive: true,
+          imageFile: undefined,
+          removeImage: false
         });
       }
+      setPreviewUrl(null);
     }
   }, [isOpen, isEditMode, equipment, reset]);
+
+  useEffect(() => {
+    if (watchImageFile && watchImageFile.length > 0) {
+      const file = watchImageFile[0];
+      const objectUrl = URL.createObjectURL(file);
+      setPreviewUrl(objectUrl);
+      setValue('removeImage', false);
+      return () => {
+        URL.revokeObjectURL(objectUrl);
+      };
+    }
+    setPreviewUrl(null);
+  }, [watchImageFile, setValue]);
+
+  const buildFormData = (data: EquipmentInput) => {
+    const formData = new FormData();
+    formData.append('name', data.name);
+    formData.append('quantity', String(data.quantity));
+
+    if (data.description) {
+      formData.append('description', data.description);
+    }
+    if (data.location) {
+      formData.append('location', data.location);
+    }
+    if (data.categoryId !== undefined && data.categoryId !== null) {
+      formData.append('categoryId', String(data.categoryId));
+    } else if (data.categoryId === null) {
+      formData.append('categoryId', '');
+    }
+    if (typeof data.isActive === 'boolean') {
+      formData.append('isActive', String(data.isActive));
+    }
+    if (data.specifications) {
+      formData.append('specifications', JSON.stringify(data.specifications));
+    }
+    if (data.imageFile && data.imageFile.length > 0) {
+      formData.append('image', data.imageFile[0]);
+    }
+    if (data.removeImage) {
+      formData.append('removeImage', 'true');
+    }
+
+    return formData;
+  };
 
   // 作成処理
   const createMutation = useMutation({
@@ -96,7 +162,7 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
 
   // 更新処理
   const updateMutation = useMutation({
-    mutationFn: (data: EquipmentInput) => updateEquipment(equipment!.id, data),
+    mutationFn: (data: FormData) => updateEquipment(equipment!.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['equipment'] });
       toast({ title: '資機材を更新しました', status: 'success', duration: 3000 });
@@ -108,16 +174,22 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
   });
 
   const onSubmit = (data: EquipmentInput) => {
-    // categoryIdが空文字の場合はnullに変換
-    const submitData = {
+    const normalizedCategoryId =
+      data.categoryId === undefined
+        ? undefined
+        : data.categoryId
+            ? Number(data.categoryId)
+            : null;
+
+    const formData = buildFormData({
       ...data,
-      categoryId: data.categoryId ? Number(data.categoryId) : null
-    };
+      categoryId: normalizedCategoryId
+    });
 
     if (isEditMode) {
-      updateMutation.mutate(submitData);
+      updateMutation.mutate(formData);
     } else {
-      createMutation.mutate(submitData);
+      createMutation.mutate(formData);
     }
   };
 
@@ -125,7 +197,7 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
     <Modal isOpen={isOpen} onClose={onClose} size="lg">
       <ModalOverlay />
       <ModalContent>
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onSubmit)} encType="multipart/form-data">
           <ModalHeader>{isEditMode ? '資機材編集' : '資機材登録'}</ModalHeader>
           <ModalCloseButton />
 
@@ -190,6 +262,38 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
                   placeholder="資機材の説明や注意事項"
                   rows={3}
                 />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>画像</FormLabel>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  {...register('imageFile')}
+                />
+                <FormHelperText>5MB以下の画像ファイルをアップロードできます</FormHelperText>
+                {(previewUrl || equipment?.imageUrl) && (
+                  <VStack align="flex-start" spacing={2} mt={3} w="100%">
+                    <Image
+                      src={previewUrl || equipment?.imageUrl || ''}
+                      alt="資機材画像プレビュー"
+                      maxH="200px"
+                      borderRadius="md"
+                      objectFit="cover"
+                    />
+                    {previewUrl ? (
+                      <Text fontSize="sm" color="gray.500">
+                        新しい画像を選択すると保存時に既存画像が置き換わります
+                      </Text>
+                    ) : (
+                      isEditMode && equipment?.imageUrl && (
+                        <Checkbox {...register('removeImage')}>
+                          既存画像を削除する
+                        </Checkbox>
+                      )
+                    )}
+                  </VStack>
+                )}
               </FormControl>
 
               {isEditMode && (

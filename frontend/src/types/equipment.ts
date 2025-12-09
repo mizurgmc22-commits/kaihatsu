@@ -15,6 +15,7 @@ export interface Equipment {
   description?: string;
   quantity: number;
   location?: string;
+  imageUrl?: string;
   isActive: boolean;
   specifications?: Record<string, unknown>;
   category?: EquipmentCategory;
@@ -45,6 +46,8 @@ export interface EquipmentInput {
   categoryId?: number | null;
   specifications?: Record<string, unknown>;
   isActive?: boolean;
+  imageFile?: FileList;
+  removeImage?: boolean;
 }
 
 // カテゴリ作成・更新リクエスト

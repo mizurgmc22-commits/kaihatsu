@@ -2,7 +2,6 @@ import { apiClient } from './client';
 import type {
   Equipment,
   EquipmentListResponse,
-  EquipmentInput,
   EquipmentCategory,
   CategoryInput
 } from '../types/equipment';
@@ -30,13 +29,13 @@ export const getEquipment = async (id: number): Promise<Equipment> => {
 };
 
 // 資機材作成
-export const createEquipment = async (data: EquipmentInput): Promise<Equipment> => {
+export const createEquipment = async (data: FormData): Promise<Equipment> => {
   const response = await apiClient.post<Equipment>('/equipment', data);
   return response.data;
 };
 
 // 資機材更新
-export const updateEquipment = async (id: number, data: Partial<EquipmentInput>): Promise<Equipment> => {
+export const updateEquipment = async (id: number, data: FormData): Promise<Equipment> => {
   const response = await apiClient.put<Equipment>(`/equipment/${id}`, data);
   return response.data;
 };

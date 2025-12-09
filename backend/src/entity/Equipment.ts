@@ -27,6 +27,9 @@ export class Equipment {
   @Column({ nullable: true })
   location?: string;
 
+  @Column({ nullable: true })
+  imageUrl?: string;
+
   @Column({ default: true })
   isActive!: boolean;
 

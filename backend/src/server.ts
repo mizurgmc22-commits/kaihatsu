@@ -8,6 +8,7 @@ import authRouter from './routes/auth';
 import dashboardRouter from './routes/dashboard';
 import equipmentRouter from './routes/equipment';
 import reservationRouter from './routes/reservation';
+import { UPLOADS_ROOT } from './config/upload';
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -18,6 +19,7 @@ const DEFAULT_ADMIN_DEPARTMENT = process.env.DEFAULT_ADMIN_DEPARTMENT || 'シス
 
 app.use(cors());
 app.use(express.json());
+app.use('/api/uploads', express.static(UPLOADS_ROOT));
 
 app.use((req, _res, next) => {
   console.log('REQUEST', req.method, req.url);

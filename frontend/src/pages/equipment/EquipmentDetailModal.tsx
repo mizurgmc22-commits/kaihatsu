@@ -10,7 +10,8 @@ import {
   HStack,
   Text,
   Divider,
-  Box
+  Box,
+  Image
 } from '@chakra-ui/react';
 import type { Equipment } from '../../types/equipment';
 
@@ -39,6 +40,18 @@ export default function EquipmentDetailModal({ isOpen, onClose, equipment }: Pro
 
         <ModalBody pb={6}>
           <VStack align="stretch" spacing={4}>
+            {equipment.imageUrl && (
+              <Box>
+                <Image
+                  src={equipment.imageUrl}
+                  alt={`${equipment.name}の画像`}
+                  borderRadius="md"
+                  maxH="250px"
+                  objectFit="cover"
+                  w="100%"
+                />
+              </Box>
+            )}
             <Box>
               <Text fontWeight="bold" color="gray.600" fontSize="sm">
                 カテゴリ

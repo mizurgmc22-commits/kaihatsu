@@ -25,7 +25,8 @@ import {
   Box,
   useToast,
   Alert,
-  AlertIcon
+  AlertIcon,
+  Image
 } from '@chakra-ui/react';
 import { useForm, Controller } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -197,20 +198,39 @@ export default function ReservationFormModal({
               {/* 機器情報 */}
               {equipment ? (
                 <Box p={4} bg="blue.50" borderRadius="md">
-                  <HStack justify="space-between">
-                    <Box>
-                      <Text fontWeight="bold" fontSize="lg">
-                        {equipment.name}
-                      </Text>
-                      <Text fontSize="sm" color="gray.600">
-                        {equipment.category?.name || '未分類'}
-                      </Text>
-                    </Box>
-                    {!equipment.isUnlimited && (
-                      <Badge colorScheme="green" fontSize="md" px={3} py={1}>
-                        残り {equipment.remainingQuantity}
-                      </Badge>
+                  <HStack align="flex-start" spacing={4}>
+                    {equipment.imageUrl && (
+                      <Image
+                        src={equipment.imageUrl}
+                        alt={`${equipment.name}の画像`}
+                        boxSize="80px"
+                        objectFit="cover"
+                        borderRadius="md"
+                        backgroundColor="white"
+                      />
                     )}
+                    <Box flex="1">
+                      <HStack justify="space-between" align="flex-start">
+                        <Box>
+                          <Text fontWeight="bold" fontSize="lg">
+                            {equipment.name}
+                          </Text>
+                          <Text fontSize="sm" color="gray.600">
+                            {equipment.category?.name || '未分類'}
+                          </Text>
+                        </Box>
+                        {!equipment.isUnlimited && (
+                          <Badge colorScheme="green" fontSize="md" px={3} py={1}>
+                            残り {equipment.remainingQuantity}
+                          </Badge>
+                        )}
+                      </HStack>
+                      {equipment.description && (
+                        <Text mt={2} fontSize="sm" color="gray.600">
+                          {equipment.description}
+                        </Text>
+                      )}
+                    </Box>
                   </HStack>
                 </Box>
               ) : (

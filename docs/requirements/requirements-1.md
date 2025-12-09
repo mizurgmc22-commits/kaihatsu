@@ -4,7 +4,7 @@
 
 - **目的**: 救急・トレーニング機材や消耗品の貸出申請を Web 化し、利用者の予約と管理者のモニタリングを一元化する。
 - **対象範囲**: 添付申請書に記載された資機材全般（蘇生講習資機材、トレーニング資機材、機械類、消耗品 など）。
-- **開発・検証環境**: フロントエンドは React + Vite、バックエンドは Express + TypeORM（開発時は SQLite、本番は PostgreSQL / MySQL を想定）。`npm run dev` で API と UI を同時起動し、http://localhost:5173 経由で UI を確認する。
+- **開発・検証環境**: フロントエンドは React + Vite、バックエンドは Express + TypeORM（開発時は SQLite、本番は PostgreSQL / MySQL を想定）。`npm run dev` で API と UI を同時起動し、<http://localhost:5173> 経由で UI を確認する。
 
 ## 2. ステークホルダーとロール
 
