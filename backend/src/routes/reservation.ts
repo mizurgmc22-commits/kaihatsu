@@ -321,6 +321,208 @@ reservationRouter.get('/calendar/:equipmentId', async (req, res, next) => {
   }
 });
 
+// ========== CSVエクスポート ==========
+// 注意: /:id より前に定義する必要がある
+
+// 予約データCSVエクスポート（管理者用）
+reservationRouter.get('/admin/export', async (req, res, next) => {
+  try {
+    const { status, startDate, endDate, equipmentId, department } = req.query;
+
+    const queryBuilder = reservationRepo()
+      .createQueryBuilder('reservation')
+      .leftJoinAndSelect('reservation.equipment', 'equipment')
+      .leftJoinAndSelect('equipment.category', 'category')
+      .leftJoinAndSelect('reservation.user', 'user');
+
+    // フィルタ条件
+    if (status) {
+      queryBuilder.andWhere('reservation.status = :status', { status });
+    }
+
+    if (startDate) {
+      queryBuilder.andWhere('reservation.startTime >= :startDate', {
+        startDate: new Date(startDate as string)
+      });
+    }
+
+    if (endDate) {
+      queryBuilder.andWhere('reservation.endTime <= :endDate', {
+        endDate: new Date(endDate as string)
+      });
+    }
+
+    if (equipmentId) {
+      queryBuilder.andWhere('reservation.equipmentId = :equipmentId', {
+        equipmentId: Number(equipmentId)
+      });
+    }
+
+    if (department) {
+      queryBuilder.andWhere('reservation.department LIKE :department', {
+        department: `%${department}%`
+      });
+    }
+
+    queryBuilder.orderBy('reservation.startTime', 'DESC');
+
+    const reservations = await queryBuilder.getMany();
+
+    // CSV生成
+    const BOM = '\uFEFF'; // Excel用BOM
+    const headers = [
+      '予約ID',
+      'ステータス',
+      '機材名',
+      'カテゴリ',
+      '部署',
+      '申請者名',
+      '連絡先',
+      '利用開始日時',
+      '利用終了日時',
+      '数量',
+      '利用目的',
+      '利用場所',
+      '作成日時'
+    ];
+
+    const statusLabels: Record<string, string> = {
+      pending: '承認待ち',
+      approved: '承認済み',
+      rejected: '却下',
+      cancelled: 'キャンセル',
+      completed: '完了'
+    };
+
+    const formatDateTime = (date: Date) => {
+      const d = new Date(date);
+      return d.toLocaleString('ja-JP', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    };
+
+    const escapeCSV = (value: string | number | undefined | null): string => {
+      if (value === undefined || value === null) return '';
+      const str = String(value);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = reservations.map((r) => [
+      r.id,
+      statusLabels[r.status] || r.status,
+      r.equipment?.name || r.customEquipmentName || '',
+      r.equipment?.category?.name || '',
+      r.department,
+      r.applicantName,
+      r.contactInfo,
+      formatDateTime(r.startTime),
+      formatDateTime(r.endTime),
+      r.quantity,
+      r.purpose || '',
+      r.location || '',
+      formatDateTime(r.createdAt)
+    ]);
+
+    const csvContent = BOM + [headers, ...rows].map((row) => row.map(escapeCSV).join(',')).join('\n');
+
+    const filename = `reservations_${new Date().toISOString().slice(0, 10)}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csvContent);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ========== ユーザー向け予約履歴 ==========
+// 注意: /:id より前に定義する必要がある
+
+// 自分の予約履歴取得（連絡先で検索）
+reservationRouter.get('/my/history', async (req, res, next) => {
+  try {
+    const { contactInfo, page = 1, limit = 20 } = req.query;
+
+    if (!contactInfo) {
+      return res.status(400).json({ message: '連絡先は必須です' });
+    }
+
+    const queryBuilder = reservationRepo()
+      .createQueryBuilder('reservation')
+      .leftJoinAndSelect('reservation.equipment', 'equipment')
+      .leftJoinAndSelect('equipment.category', 'category')
+      .where('reservation.contactInfo = :contactInfo', { contactInfo });
+
+    const skip = (Number(page) - 1) * Number(limit);
+    queryBuilder.skip(skip).take(Number(limit));
+    queryBuilder.orderBy('reservation.createdAt', 'DESC');
+
+    const [items, total] = await queryBuilder.getManyAndCount();
+
+    res.json({
+      items,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        totalPages: Math.ceil(total / Number(limit))
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ユーザーによる予約キャンセル
+reservationRouter.post('/my/cancel/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { contactInfo } = req.body;
+
+    if (!contactInfo) {
+      return res.status(400).json({ message: '連絡先は必須です' });
+    }
+
+    const reservation = await reservationRepo().findOne({
+      where: { id: Number(id) }
+    });
+
+    if (!reservation) {
+      return res.status(404).json({ message: '予約が見つかりません' });
+    }
+
+    // 連絡先で本人確認
+    if (reservation.contactInfo !== contactInfo) {
+      return res.status(403).json({ message: 'この予約をキャンセルする権限がありません' });
+    }
+
+    // キャンセル可能なステータスかチェック
+    if (![ReservationStatus.PENDING, ReservationStatus.APPROVED].includes(reservation.status as ReservationStatus)) {
+      return res.status(400).json({ message: 'この予約はキャンセルできません' });
+    }
+
+    // 開始日前かチェック
+    const now = new Date();
+    if (new Date(reservation.startTime) <= now) {
+      return res.status(400).json({ message: '利用開始後の予約はキャンセルできません' });
+    }
+
+    reservation.status = ReservationStatus.CANCELLED;
+    await reservationRepo().save(reservation);
+
+    res.json({ message: '予約をキャンセルしました', reservation });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // 予約詳細取得
 reservationRouter.get('/:id', async (req, res, next) => {
   try {
@@ -338,7 +540,7 @@ reservationRouter.get('/:id', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-}); // Close the route definition properly
+});
 
 // 予約作成
 reservationRouter.post('/', async (req, res, next) => {

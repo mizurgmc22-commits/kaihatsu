@@ -89,3 +89,46 @@ export const updateReservation = async (id: number, data: Partial<ReservationInp
 export const cancelReservation = async (id: number): Promise<void> => {
   await apiClient.delete(`/reservations/${id}`);
 };
+
+// ========== CSVエクスポート ==========
+
+export interface ExportParams {
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+  equipmentId?: number;
+  department?: string;
+}
+
+// CSVエクスポートURL生成
+export const getExportUrl = (params?: ExportParams): string => {
+  const searchParams = new URLSearchParams();
+  if (params?.status) searchParams.append('status', params.status);
+  if (params?.startDate) searchParams.append('startDate', params.startDate);
+  if (params?.endDate) searchParams.append('endDate', params.endDate);
+  if (params?.equipmentId) searchParams.append('equipmentId', String(params.equipmentId));
+  if (params?.department) searchParams.append('department', params.department);
+  
+  const queryString = searchParams.toString();
+  return `/api/reservations/admin/export${queryString ? `?${queryString}` : ''}`;
+};
+
+// ========== ユーザー向け予約履歴 ==========
+
+export interface MyReservationParams {
+  contactInfo: string;
+  page?: number;
+  limit?: number;
+}
+
+// 自分の予約履歴取得
+export const getMyReservations = async (params: MyReservationParams): Promise<ReservationListResponse> => {
+  const response = await apiClient.get<ReservationListResponse>('/reservations/my/history', { params });
+  return response.data;
+};
+
+// ユーザーによる予約キャンセル
+export const cancelMyReservation = async (id: number, contactInfo: string): Promise<{ message: string; reservation: Reservation }> => {
+  const response = await apiClient.post<{ message: string; reservation: Reservation }>(`/reservations/my/cancel/${id}`, { contactInfo });
+  return response.data;
+};

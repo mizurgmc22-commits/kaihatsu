@@ -25,7 +25,7 @@ import {
 } from '@chakra-ui/react';
 import { FiCheck, FiX, FiEye } from 'react-icons/fi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getReservations, updateReservation } from '../../api/reservation';
+import { getReservations, updateReservation, getExportUrl } from '../../api/reservation';
 
 export default function ReservationManagement() {
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -106,9 +106,9 @@ export default function ReservationManagement() {
           colorScheme="blue"
           variant="outline"
           size="sm"
-          onClick={() => {
-            // TODO: CSVエクスポートAPIと接続
-          }}
+          as="a"
+          href={getExportUrl({ status: statusFilter || undefined })}
+          download
         >
           CSVダウンロード
         </Button>

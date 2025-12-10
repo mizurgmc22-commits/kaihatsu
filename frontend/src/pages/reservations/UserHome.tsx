@@ -8,10 +8,11 @@ import {
   TabPanel,
   Icon
 } from '@chakra-ui/react';
-import { CalendarIcon } from '@chakra-ui/icons';
+import { CalendarIcon, TimeIcon } from '@chakra-ui/icons';
 import { FiPackage } from 'react-icons/fi';
 import ReservationCalendar from './ReservationCalendar';
 import EquipmentListView from './EquipmentListView';
+import MyReservations from './MyReservations';
 
 export default function UserHome() {
   const [tabIndex, setTabIndex] = useState(0);
@@ -33,6 +34,10 @@ export default function UserHome() {
             <Icon as={FiPackage} mr={2} />
             資機材一覧
           </Tab>
+          <Tab>
+            <TimeIcon mr={2} />
+            予約履歴
+          </Tab>
         </TabList>
 
         <TabPanels>
@@ -41,6 +46,9 @@ export default function UserHome() {
           </TabPanel>
           <TabPanel px={0}>
             <EquipmentListView />
+          </TabPanel>
+          <TabPanel px={0}>
+            <MyReservations />
           </TabPanel>
         </TabPanels>
       </Tabs>
