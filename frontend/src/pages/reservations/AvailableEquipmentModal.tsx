@@ -18,10 +18,12 @@ import {
   Divider,
   Input,
   FormControl,
-  FormLabel
+  FormLabel,
+  Image
 } from '@chakra-ui/react';
 import type { AvailableEquipment } from '../../types/reservation';
 import type { EquipmentCategory } from '../../types/equipment';
+import { resolveEquipmentImage } from '../../constants/equipmentImageOverrides';
 
 interface Props {
   isOpen: boolean;
@@ -148,45 +150,58 @@ export default function AvailableEquipmentModal({
                     <Badge colorScheme="blue">{groupedEquipment[categoryName]?.length ?? 0} 件</Badge>
                   </HStack>
                   <VStack spacing={3} align="stretch">
-                    {groupedEquipment[categoryName]?.map((item) => (
-                      <Box
-                        key={item.id}
-                        p={4}
-                        borderWidth="1px"
-                        borderRadius="md"
-                        bg={item.isAvailable ? 'white' : 'gray.50'}
-                        opacity={item.isAvailable ? 1 : 0.7}
-                        _hover={item.isAvailable ? { borderColor: 'blue.300', shadow: 'sm' } : {}}
-                        transition="all 0.2s"
-                      >
-                        <Flex justify="space-between" align="start">
-                          <Box flex="1">
-                            <HStack mb={1}>
-                              <Text fontWeight="bold">{item.name}</Text>
-                              {getAvailabilityBadge(item)}
-                            </HStack>
-                            {item.location && (
-                              <Text fontSize="sm" color="gray.500">
-                                保管場所: {item.location}
-                              </Text>
+                    {groupedEquipment[categoryName]?.map((item) => {
+                      const imageSrc = resolveEquipmentImage(item.name, item.imageUrl);
+                      return (
+                        <Box
+                          key={item.id}
+                          p={4}
+                          borderWidth="1px"
+                          borderRadius="md"
+                          bg={item.isAvailable ? 'white' : 'gray.50'}
+                          opacity={item.isAvailable ? 1 : 0.7}
+                          _hover={item.isAvailable ? { borderColor: 'blue.300', shadow: 'sm' } : {}}
+                          transition="all 0.2s"
+                        >
+                          <Flex justify="space-between" align="start" gap={4}>
+                            {imageSrc && (
+                              <Image
+                                src={imageSrc}
+                                alt={`${item.name}の画像`}
+                                boxSize="64px"
+                                objectFit="cover"
+                                borderRadius="md"
+                                backgroundColor="white"
+                              />
                             )}
-                            {!item.isUnlimited && (
-                              <Text fontSize="sm" color="gray.500">
-                                保有数: {item.quantity} / 残り: {item.remainingQuantity}
-                              </Text>
-                            )}
-                          </Box>
-                          <Button
-                            colorScheme="blue"
-                            size="sm"
-                            isDisabled={!item.isAvailable}
-                            onClick={() => onSelect(item)}
-                          >
-                            予約する
-                          </Button>
-                        </Flex>
-                      </Box>
-                    ))}
+                            <Box flex="1">
+                              <HStack mb={1}>
+                                <Text fontWeight="bold">{item.name}</Text>
+                                {getAvailabilityBadge(item)}
+                              </HStack>
+                              {item.location && (
+                                <Text fontSize="sm" color="gray.500">
+                                  保管場所: {item.location}
+                                </Text>
+                              )}
+                              {!item.isUnlimited && (
+                                <Text fontSize="sm" color="gray.500">
+                                  保有数: {item.quantity} / 残り: {item.remainingQuantity}
+                                </Text>
+                              )}
+                            </Box>
+                            <Button
+                              colorScheme="blue"
+                              size="sm"
+                              isDisabled={!item.isAvailable}
+                              onClick={() => onSelect(item)}
+                            >
+                              予約する
+                            </Button>
+                          </Flex>
+                        </Box>
+                      );
+                    })}
                   </VStack>
                 </Box>
               ))}

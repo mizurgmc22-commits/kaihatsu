@@ -14,6 +14,7 @@ import {
   Image
 } from '@chakra-ui/react';
 import type { Equipment } from '../../types/equipment';
+import { resolveEquipmentImage } from '../../constants/equipmentImageOverrides';
 
 interface Props {
   isOpen: boolean;
@@ -23,6 +24,7 @@ interface Props {
 
 export default function EquipmentDetailModal({ isOpen, onClose, equipment }: Props) {
   if (!equipment) return null;
+  const imageSrc = resolveEquipmentImage(equipment.name, equipment.imageUrl);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="lg">
@@ -40,10 +42,10 @@ export default function EquipmentDetailModal({ isOpen, onClose, equipment }: Pro
 
         <ModalBody pb={6}>
           <VStack align="stretch" spacing={4}>
-            {equipment.imageUrl && (
+            {imageSrc && (
               <Box>
                 <Image
-                  src={equipment.imageUrl}
+                  src={imageSrc}
                   alt={`${equipment.name}の画像`}
                   borderRadius="md"
                   maxH="250px"

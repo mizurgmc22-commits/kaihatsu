@@ -21,6 +21,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getEquipmentList, getCategories } from '../../api/equipment';
 import type { Equipment } from '../../types/equipment';
 import EquipmentDetailModal from '../equipment/EquipmentDetailModal';
+import { resolveEquipmentImage } from '../../constants/equipmentImageOverrides';
 
 const CATEGORY_ORDER = ['蘇生講習資機材', 'トレーニング資機材', '機械類', '消耗品', 'その他'];
 
@@ -145,7 +146,9 @@ export default function EquipmentListView() {
               </HStack>
 
               <SimpleGrid columns={{ base: 2, sm: 3, md: 4, lg: 5 }} spacing={4}>
-                {groupedEquipment[categoryName]?.map((equipment) => (
+                {groupedEquipment[categoryName]?.map((equipment) => {
+                  const imageSrc = resolveEquipmentImage(equipment.name, equipment.imageUrl);
+                  return (
                   <Box
                     key={equipment.id}
                     bg="white"
@@ -159,14 +162,8 @@ export default function EquipmentListView() {
                   >
                     {/* 画像 */}
                     <Box h="120px" bg="gray.100" position="relative">
-                      {equipment.imageUrl ? (
-                        <Image
-                          src={equipment.imageUrl}
-                          alt={equipment.name}
-                          w="100%"
-                          h="100%"
-                          objectFit="cover"
-                        />
+                      {imageSrc ? (
+                        <Image src={imageSrc} alt={equipment.name} w="100%" h="100%" objectFit="cover" />
                       ) : (
                         <Flex
                           w="100%"
@@ -200,7 +197,7 @@ export default function EquipmentListView() {
                       </HStack>
                     </Box>
                   </Box>
-                ))}
+                );})}
               </SimpleGrid>
             </Box>
           ))}

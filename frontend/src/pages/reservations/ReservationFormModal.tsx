@@ -33,6 +33,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createReservation } from '../../api/reservation';
 import type { AvailableEquipment } from '../../types/reservation';
 import type { ReservationInput } from '../../types/reservation';
+import { resolveEquipmentImage } from '../../constants/equipmentImageOverrides';
 
 interface Props {
   isOpen: boolean;
@@ -68,6 +69,7 @@ export default function ReservationFormModal({
 }: Props) {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const resolvedImageSrc = equipment ? resolveEquipmentImage(equipment.name, equipment.imageUrl) : undefined;
 
   const {
     register,
@@ -199,9 +201,9 @@ export default function ReservationFormModal({
               {equipment ? (
                 <Box p={4} bg="blue.50" borderRadius="md">
                   <HStack align="flex-start" spacing={4}>
-                    {equipment.imageUrl && (
+                    {resolvedImageSrc && (
                       <Image
-                        src={equipment.imageUrl}
+                        src={resolvedImageSrc}
                         alt={`${equipment.name}の画像`}
                         boxSize="80px"
                         objectFit="cover"
