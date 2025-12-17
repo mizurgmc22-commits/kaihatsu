@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type { User, Equipment, EquipmentCategory, Reservation } from './models';
+import { masterData } from './seed-data';
 
 // データベースクラス定義
 class EquipmentBookingDB extends Dexie {
@@ -44,6 +45,47 @@ export async function initializeDatabase(): Promise<void> {
     });
     
     console.log('Default admin created');
+  }
+  
+  // カテゴリと資機材の初期データ投入
+  const categoryCount = await db.categories.count();
+  
+  if (categoryCount === 0) {
+    await seedMasterData();
+    console.log('Master data seeded');
+  }
+}
+
+// マスターデータ投入
+async function seedMasterData(): Promise<void> {
+  const now = new Date();
+  
+  // カテゴリを作成し、keyとidのマッピングを保持
+  const categoryMap: Record<string, number> = {};
+  
+  for (const cat of masterData.categories) {
+    const id = await db.categories.add({
+      name: cat.name,
+      description: cat.description,
+      createdAt: now,
+      updatedAt: now
+    });
+    categoryMap[cat.key] = id;
+  }
+  
+  // 資機材を作成
+  for (const eq of masterData.equipment) {
+    await db.equipment.add({
+      name: eq.name,
+      description: eq.description,
+      quantity: eq.quantity,
+      categoryId: categoryMap[eq.categoryKey],
+      isActive: true,
+      isUnlimited: eq.isUnlimited || false,
+      isDeleted: false,
+      createdAt: now,
+      updatedAt: now
+    });
   }
 }
 
