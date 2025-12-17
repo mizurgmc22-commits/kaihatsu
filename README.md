@@ -10,7 +10,7 @@
 # 1. 依存パッケージを一括インストール
 npm run install:all
 
-# 2. 開発サーバーを起動（フロントエンド＋バックエンド同時起動）
+# 2. 開発サーバーを起動
 npm run dev
 ```
 
@@ -27,89 +27,61 @@ npm run dev
 
 ```text
 kaihatsu/
-├── frontend/          # React + Vite (ポート: 5173)
-├── backend/           # Express + TypeORM + SQLite (ポート: 3002)
-├── package.json       # 統合起動スクリプト
-└── .env.example       # 環境変数テンプレート
+├── frontend/          # React + Vite + IndexedDB
+│   ├── src/
+│   │   ├── components/   # UIコンポーネント
+│   │   ├── pages/        # ページコンポーネント
+│   │   ├── services/     # ビジネスロジック
+│   │   ├── db/           # IndexedDB (Dexie.js)
+│   │   ├── api/          # APIラッパー（サービス呼び出し）
+│   │   ├── contexts/     # React Context
+│   │   └── types/        # TypeScript型定義
+│   └── package.json
+├── docs/              # ドキュメント
+└── package.json       # ルートスクリプト
 ```
 
 ## 🛠️ 利用可能なコマンド
 
 | コマンド | 説明 |
 |----------|------|
-| `npm run dev` | フロント＋バックを同時起動（推奨） |
-| `npm run dev:backend` | バックエンドのみ起動 |
-| `npm run dev:frontend` | フロントエンドのみ起動 |
-| `npm run install:all` | 全パッケージを一括インストール |
+| `npm run dev` | 開発サーバーを起動 |
 | `npm run build` | 本番用ビルド |
+| `npm run preview` | ビルド結果をプレビュー |
+| `npm run install:all` | 全パッケージを一括インストール |
 | `npm run clean` | node_modulesを削除 |
 
 ## 🔧 技術スタック
-
-### フロントエンド
 
 - **React 18** + **TypeScript**
 - **Vite** - 高速な開発サーバー
 - **Chakra UI** - UIコンポーネント
 - **TanStack Query** - データフェッチング
 - **FullCalendar** - カレンダー表示
+- **Dexie.js** - IndexedDBラッパー（ローカルデータベース）
 
-### バックエンド
+## 🗄️ データ永続化
 
-- **Express 5** + **TypeScript**
-- **TypeORM** - ORM
-- **SQLite** - 開発用データベース
-- **JWT** - 認証
+このアプリケーションはブラウザのIndexedDBを使用してデータを保存します。
 
-## 🔄 API連携の仕組み
+- **バックエンドサーバー不要** - 完全にフロントエンドで動作
+- **オフライン対応** - インターネット接続なしで使用可能
+- **データはブラウザに保存** - ブラウザのデータをクリアするとデータが消えます
 
-開発環境では、Viteのプロキシ機能を使用してAPI連携を実現しています：
+### データのリセット
 
-```text
-ブラウザ → http://localhost:5173/api/* 
-         ↓ (Viteプロキシ)
-バックエンド → http://localhost:3002/api/*
-```
-
-これにより：
-
-- CORSの問題が発生しない
-- 本番環境と同じパス構造でAPI呼び出し可能
-- フロントエンドとバックエンドを別々に起動する必要がない
-
-## 📝 環境変数
-
-環境変数を変更する場合は `.env.example` を `.env` にコピーして編集してください：
-
-```bash
-cp .env.example .env
-```
-
-## 🗄️ データベース
-
-- 開発環境では SQLite を使用
-- データベースファイル: `backend/data/database.sqlite`
-- サーバー起動時に自動的にスキーマが同期されます
-
-### データベースのリセット
-
-```bash
-# データベースファイルを削除して再起動
-rm backend/data/database.sqlite
-npm run dev
-```
+ブラウザの開発者ツールから：
+1. Application タブを開く
+2. Storage > IndexedDB > EquipmentBookingDB を削除
+3. ページをリロード
 
 ## 🐛 トラブルシューティング
 
 ### ポートが使用中の場合
 
 ```bash
-# Windows
-netstat -ano | findstr :3002
-taskkill /PID <PID> /F
-
 # Mac/Linux
-lsof -i :3002
+lsof -i :5173
 kill -9 <PID>
 ```
 
@@ -119,6 +91,12 @@ kill -9 <PID>
 npm run clean
 npm run install:all
 ```
+
+### データが表示されない場合
+
+1. ブラウザのキャッシュをクリア
+2. IndexedDBをリセット（上記参照）
+3. ページをリロード
 
 ## 📄 ライセンス
 

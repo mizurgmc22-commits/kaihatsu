@@ -7,8 +7,16 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import theme from './styles/theme';
 import { AuthProvider } from './contexts/AuthContext';
+import { initializeDatabase } from './db';
 
 const queryClient = new QueryClient();
+
+// データベース初期化
+initializeDatabase().then(() => {
+  console.log('Database initialized');
+}).catch((error) => {
+  console.error('Database initialization failed:', error);
+});
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

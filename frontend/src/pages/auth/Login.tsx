@@ -40,8 +40,9 @@ const Login = () => {
         isClosable: true,
       });
       navigate('/admin');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'ログインに失敗しました');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'ログインに失敗しました';
+      setError(message);
     } finally {
       setIsLoading(false);
     }
