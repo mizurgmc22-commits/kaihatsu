@@ -23,8 +23,6 @@ import {
   Collapse,
   Flex
 } from '@chakra-ui/react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../../api/client';
 
 interface AdminUser {
   id: number;
@@ -66,69 +64,20 @@ export default function AdminSettings() {
   const [formState, setFormState] = useState<AdminForm>(initialForm);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [deletingAdminId, setDeletingAdminId] = useState<number | null>(null);
-  const queryClient = useQueryClient();
+  const [admins, setAdmins] = useState<AdminUser[]>([
+    {
+      id: 1,
+      name: '管理 太郎',
+      email: 'admin@sazan-with.local',
+      department: 'システム管理',
+      role: 'admin',
+      createdAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString()
+    }
+  ]);
+  const [isLoadingAdmins] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const toast = useToast();
-
-  const adminsQuery = useQuery({
-    queryKey: ['admins'],
-    queryFn: async () => {
-      const response = await apiClient.get<AdminUser[]>('/auth/admins');
-      return response.data;
-    }
-  });
-
-  const deleteAdminMutation = useMutation({
-    mutationFn: async (adminId: number) => {
-      await apiClient.delete(`/auth/admins/${adminId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admins'] });
-      toast({
-        title: '管理者を削除しました',
-        status: 'success',
-        duration: 3000,
-        isClosable: true
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: '削除に失敗しました',
-        description: error.response?.data?.message || '時間をおいて再度お試しください',
-        status: 'error',
-        duration: 4000,
-        isClosable: true
-      });
-    },
-    onSettled: () => {
-      setDeletingAdminId(null);
-    }
-  });
-
-  const createAdminMutation = useMutation({
-    mutationFn: async (data: AdminForm) => {
-      const response = await apiClient.post('/auth/admins', data);
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admins'] });
-      setFormState(initialForm);
-      toast({
-        title: '管理者を登録しました',
-        status: 'success',
-        duration: 3000,
-        isClosable: true
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: '登録に失敗しました',
-        description: error.response?.data?.message || '時間をおいて再度お試しください',
-        status: 'error',
-        duration: 4000,
-        isClosable: true
-      });
-    }
-  });
 
   const handleChange = (field: keyof AdminForm) => (event: React.ChangeEvent<HTMLInputElement>) => {
     setFormState((prev) => ({ ...prev, [field]: event.target.value }));
@@ -136,7 +85,26 @@ export default function AdminSettings() {
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    createAdminMutation.mutate(formState);
+    setIsSubmitting(true);
+    const newAdmin: AdminUser = {
+      id: admins.length ? Math.max(...admins.map((a) => a.id)) + 1 : 1,
+      name: formState.name,
+      email: formState.email,
+      department: formState.department,
+      role: 'admin',
+      createdAt: new Date().toISOString(),
+      lastLoginAt: undefined
+    };
+    setAdmins((prev) => [...prev, newAdmin]);
+    setFormState(initialForm);
+    setIsSubmitting(false);
+    toast({
+      title: '管理者を登録しました（スタブ）',
+      description: 'API連携前の仮データです。',
+      status: 'success',
+      duration: 3000,
+      isClosable: true
+    });
   };
 
   const handleDeleteAdmin = (admin: AdminUser) => {
@@ -144,7 +112,15 @@ export default function AdminSettings() {
     if (!confirmDelete) return;
 
     setDeletingAdminId(admin.id);
-    deleteAdminMutation.mutate(admin.id);
+    setAdmins((prev) => prev.filter((a) => a.id !== admin.id));
+    toast({
+      title: '管理者を削除しました（スタブ）',
+      description: 'API連携前の仮データです。',
+      status: 'info',
+      duration: 3000,
+      isClosable: true
+    });
+    setDeletingAdminId(null);
   };
 
   const isSubmitDisabled =
@@ -175,11 +151,9 @@ export default function AdminSettings() {
                   {isFormOpen ? '登録フォームを閉じる' : '管理者を追加'}
                 </Button>
               </Flex>
-              {adminsQuery.isLoading ? (
+              {isLoadingAdmins ? (
                 <Text color="gray.500">読み込み中...</Text>
-              ) : adminsQuery.isError ? (
-                <Text color="red.500">一覧の取得に失敗しました。</Text>
-              ) : adminsQuery.data?.length ? (
+              ) : admins.length ? (
                 <Box overflowX="auto">
                   <Table size="sm">
                     <Thead>
@@ -193,7 +167,7 @@ export default function AdminSettings() {
                       </Tr>
                     </Thead>
                     <Tbody>
-                      {adminsQuery.data.map((admin) => (
+                      {admins.map((admin) => (
                         <Tr key={admin.id}>
                           <Td>
                             <VStack align="start" spacing={0}>
@@ -217,7 +191,7 @@ export default function AdminSettings() {
                               colorScheme="red"
                               variant="outline"
                               onClick={() => handleDeleteAdmin(admin)}
-                              isLoading={deletingAdminId === admin.id && deleteAdminMutation.isPending}
+                              isLoading={deletingAdminId === admin.id}
                             >
                               削除
                             </Button>
@@ -275,7 +249,7 @@ export default function AdminSettings() {
                   colorScheme="blue"
                   width="full"
                   isDisabled={isSubmitDisabled}
-                  isLoading={createAdminMutation.isPending}
+                  isLoading={isSubmitting}
                   loadingText="登録中"
                 >
                   管理者を登録
