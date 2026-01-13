@@ -356,7 +356,6 @@ export default function AdminGantt() {
               {/* カテゴリ・機器リスト */}
               {categoryGroups.map(({ categoryName, equipments }) => (
                 <Box key={`left-${categoryName}`} mb={6}>
-                  <Text fontWeight="bold" color="gray.700" mb={3}>{categoryName}</Text>
                   <Box display="flex" flexDirection="column" gap={4}>
                     {equipments.map(({ equipmentName, laneCount, maxUnits, reservationCount }) => {
                       const accent = equipmentColorMap.get(equipmentName) ?? DEFAULT_CATEGORY_COLOR;
@@ -431,9 +430,6 @@ export default function AdminGantt() {
                   {/* カテゴリ・タイムライン */}
                   {categoryGroups.map(({ categoryName, equipments }) => (
                     <Box key={`timeline-${categoryName}`} mb={6}>
-                      <Text fontWeight="bold" color="gray.500" mb={3}>
-                        {categoryName}
-                      </Text>
                       <Box display="flex" flexDirection="column" gap={4}>
                         {equipments.map(({ equipmentName, events: equipmentEvents, laneCount }) => {
                           const accent = equipmentColorMap.get(equipmentName) ?? DEFAULT_CATEGORY_COLOR;
