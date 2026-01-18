@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent } from "react";
 import {
   Box,
   Heading,
@@ -21,17 +21,28 @@ import {
   Stack,
   Badge,
   Collapse,
-  Flex
-} from '@chakra-ui/react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../../api/client';
+  Flex,
+} from "@chakra-ui/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { db } from "../../lib/firebase";
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  deleteDoc,
+  doc,
+  setDoc,
+  serverTimestamp,
+  Timestamp,
+} from "firebase/firestore";
 
 interface AdminUser {
-  id: number;
+  id: string;
   name: string;
   email: string;
   department: string;
-  role: 'admin' | 'system_admin';
+  role: "admin" | "system_admin";
   lastLoginAt?: string;
   createdAt: string;
 }
@@ -44,95 +55,114 @@ interface AdminForm {
 }
 
 const initialForm: AdminForm = {
-  name: '',
-  email: '',
-  password: '',
-  department: ''
+  name: "",
+  email: "",
+  password: "",
+  department: "",
 };
 
 const formatDate = (value?: string) => {
-  if (!value) return '未ログイン';
+  if (!value) return "未ログイン";
   const date = new Date(value);
-  return date.toLocaleString('ja-JP', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
+  return date.toLocaleString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 };
 
 export default function AdminSettings() {
   const [formState, setFormState] = useState<AdminForm>(initialForm);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [deletingAdminId, setDeletingAdminId] = useState<number | null>(null);
+  const [deletingAdminId, setDeletingAdminId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const toast = useToast();
 
   const adminsQuery = useQuery({
-    queryKey: ['admins'],
+    queryKey: ["admins"],
     queryFn: async () => {
-      const response = await apiClient.get<AdminUser[]>('/auth/admins');
-      return response.data;
-    }
+      const usersRef = collection(db, "users");
+      const q = query(usersRef, where("role", "in", ["admin", "system_admin"]));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt:
+          (doc.data().createdAt as Timestamp)?.toDate().toISOString() ||
+          new Date().toISOString(),
+        lastLoginAt:
+          (doc.data().lastLoginAt as Timestamp)?.toDate().toISOString() ||
+          undefined,
+      })) as AdminUser[];
+    },
   });
 
   const deleteAdminMutation = useMutation({
-    mutationFn: async (adminId: number) => {
-      await apiClient.delete(`/auth/admins/${adminId}`);
+    mutationFn: async (adminId: string) => {
+      // Authからの削除はAdmin SDKが必要なため、一旦Firestoreのみ
+      await deleteDoc(doc(db, "users", adminId));
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admins'] });
+      queryClient.invalidateQueries({ queryKey: ["admins"] });
       toast({
-        title: '管理者を削除しました',
-        status: 'success',
-        duration: 3000,
-        isClosable: true
+        title: "管理者を削除しました (Firestoreのみ)",
+        description: "Authからの削除はFirebaseコンソールで行ってください",
+        status: "info",
+        duration: 5000,
+        isClosable: true,
       });
     },
     onError: (error: any) => {
       toast({
-        title: '削除に失敗しました',
-        description: error.response?.data?.message || '時間をおいて再度お試しください',
-        status: 'error',
+        title: "削除に失敗しました",
+        description: error.message || "時間をおいて再度お試しください",
+        status: "error",
         duration: 4000,
-        isClosable: true
+        isClosable: true,
       });
     },
     onSettled: () => {
       setDeletingAdminId(null);
-    }
+    },
   });
 
   const createAdminMutation = useMutation({
     mutationFn: async (data: AdminForm) => {
-      const response = await apiClient.post('/auth/admins', data);
-      return response.data;
+      // 注意: フロントエンドSDKでは他ユーザーの作成が難しいため、
+      // ここではFirestoreに「予約」として入れるか、直接作成を試みる（自身がログアウトされるリスクあり）
+      // 今回は移行のアナウンスを表示するように誘導
+      throw new Error(
+        "Firebaseへの移行後は、Firebaseコンソールからユーザーを作成し、Firestoreのusersコレクションに情報を登録してください。",
+      );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admins'] });
+      queryClient.invalidateQueries({ queryKey: ["admins"] });
       setFormState(initialForm);
       toast({
-        title: '管理者を登録しました',
-        status: 'success',
+        title: "管理者を登録しました",
+        status: "success",
         duration: 3000,
-        isClosable: true
+        isClosable: true,
       });
     },
     onError: (error: any) => {
       toast({
-        title: '登録に失敗しました',
-        description: error.response?.data?.message || '時間をおいて再度お試しください',
-        status: 'error',
-        duration: 4000,
-        isClosable: true
+        title: "登録に失敗しました",
+        description: error.message,
+        status: "warning",
+        duration: 6000,
+        isClosable: true,
       });
-    }
+    },
   });
 
-  const handleChange = (field: keyof AdminForm) => (event: React.ChangeEvent<HTMLInputElement>) => {
-    setFormState((prev) => ({ ...prev, [field]: event.target.value }));
-  };
+  const handleChange =
+    (field: keyof AdminForm) =>
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      setFormState((prev) => ({ ...prev, [field]: event.target.value }));
+    };
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -140,7 +170,9 @@ export default function AdminSettings() {
   };
 
   const handleDeleteAdmin = (admin: AdminUser) => {
-    const confirmDelete = window.confirm(`${admin.name} さんを削除しますか？`);
+    const confirmDelete = window.confirm(
+      `${admin.name} さんを削除しますか？\n(注意: Firestoreの権限情報のみ削除されます)`,
+    );
     if (!confirmDelete) return;
 
     setDeletingAdminId(admin.id);
@@ -148,7 +180,10 @@ export default function AdminSettings() {
   };
 
   const isSubmitDisabled =
-    !formState.name || !formState.email || !formState.password || !formState.department;
+    !formState.name ||
+    !formState.email ||
+    !formState.password ||
+    !formState.department;
 
   return (
     <Box>
@@ -160,7 +195,12 @@ export default function AdminSettings() {
         <Card>
           <CardBody>
             <Stack spacing={4} divider={<Divider />}>
-              <Flex align={{ base: 'stretch', md: 'center' }} justify="space-between" gap={4} flexDir={{ base: 'column', md: 'row' }}>
+              <Flex
+                align={{ base: "stretch", md: "center" }}
+                justify="space-between"
+                gap={4}
+                flexDir={{ base: "column", md: "row" }}
+              >
                 <Box>
                   <Heading size="md">登録済み管理者</Heading>
                   <Text fontSize="sm" color="gray.600">
@@ -168,11 +208,11 @@ export default function AdminSettings() {
                   </Text>
                 </Box>
                 <Button
-                  alignSelf={{ base: 'flex-start', md: 'center' }}
+                  alignSelf={{ base: "flex-start", md: "center" }}
                   colorScheme="blue"
                   onClick={() => setIsFormOpen((prev) => !prev)}
                 >
-                  {isFormOpen ? '登録フォームを閉じる' : '管理者を追加'}
+                  {isFormOpen ? "登録フォームを閉じる" : "管理者を追加"}
                 </Button>
               </Flex>
               {adminsQuery.isLoading ? (
@@ -206,8 +246,16 @@ export default function AdminSettings() {
                           <Td>{admin.email}</Td>
                           <Td>{admin.department}</Td>
                           <Td>
-                            <Badge colorScheme={admin.role === 'system_admin' ? 'purple' : 'blue'}>
-                              {admin.role === 'system_admin' ? 'システム管理者' : '管理者'}
+                            <Badge
+                              colorScheme={
+                                admin.role === "system_admin"
+                                  ? "purple"
+                                  : "blue"
+                              }
+                            >
+                              {admin.role === "system_admin"
+                                ? "システム管理者"
+                                : "管理者"}
                             </Badge>
                           </Td>
                           <Td>{formatDate(admin.lastLoginAt)}</Td>
@@ -217,7 +265,10 @@ export default function AdminSettings() {
                               colorScheme="red"
                               variant="outline"
                               onClick={() => handleDeleteAdmin(admin)}
-                              isLoading={deletingAdminId === admin.id && deleteAdminMutation.isPending}
+                              isLoading={
+                                deletingAdminId === admin.id &&
+                                deleteAdminMutation.isPending
+                              }
                             >
                               削除
                             </Button>
@@ -243,30 +294,43 @@ export default function AdminSettings() {
               <Text fontSize="sm" color="gray.600" mb={6}>
                 管理権限を付与したい職員の情報を入力してください。
               </Text>
-              <VStack as="form" spacing={4} align="stretch" onSubmit={handleSubmit}>
+              <VStack
+                as="form"
+                spacing={4}
+                align="stretch"
+                onSubmit={handleSubmit}
+              >
                 <FormControl isRequired>
                   <FormLabel>氏名</FormLabel>
-                  <Input value={formState.name} onChange={handleChange('name')} placeholder="例: 管理 太郎" />
+                  <Input
+                    value={formState.name}
+                    onChange={handleChange("name")}
+                    placeholder="例: 管理 太郎"
+                  />
                 </FormControl>
                 <FormControl isRequired>
                   <FormLabel>メールアドレス</FormLabel>
                   <Input
                     type="email"
                     value={formState.email}
-                    onChange={handleChange('email')}
+                    onChange={handleChange("email")}
                     placeholder="admin@example.com"
                   />
                 </FormControl>
                 <FormControl isRequired>
                   <FormLabel>部署</FormLabel>
-                  <Input value={formState.department} onChange={handleChange('department')} placeholder="例: 医療安全管理室" />
+                  <Input
+                    value={formState.department}
+                    onChange={handleChange("department")}
+                    placeholder="例: 医療安全管理室"
+                  />
                 </FormControl>
                 <FormControl isRequired>
                   <FormLabel>初期パスワード</FormLabel>
                   <Input
                     type="password"
                     value={formState.password}
-                    onChange={handleChange('password')}
+                    onChange={handleChange("password")}
                     placeholder="英数字8文字以上"
                   />
                 </FormControl>

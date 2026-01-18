@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from "react";
 import {
   Box,
   Heading,
@@ -10,82 +10,95 @@ import {
   HStack,
   Badge,
   FormControl,
-  FormLabel
-} from '@chakra-ui/react';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getCategories } from '../../api/equipment';
-import { getAvailableEquipment, getCalendarEvents, type CalendarEvent } from '../../api/reservation';
-import type { AvailableEquipment } from '../../types/reservation';
-import AvailableEquipmentModal from './AvailableEquipmentModal';
-import ReservationFormModal from './ReservationFormModal';
+  FormLabel,
+} from "@chakra-ui/react";
+import FullCalendar from "@fullcalendar/react";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import interactionPlugin from "@fullcalendar/interaction";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getCategories } from "../../api/equipment";
+import {
+  getAvailableEquipment,
+  getCalendarEvents,
+  type CalendarEvent,
+} from "../../api/reservation";
+import type { AvailableEquipment } from "../../types/reservation";
+import AvailableEquipmentModal from "./AvailableEquipmentModal";
+import ReservationFormModal from "./ReservationFormModal";
 
 export default function ReservationCalendar() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState<string>('');
-  const [selectedEquipment, setSelectedEquipment] = useState<AvailableEquipment | null>(null);
-  const [customEquipmentName, setCustomEquipmentName] = useState<string | null>(null);
-  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const [selectedEquipment, setSelectedEquipment] =
+    useState<AvailableEquipment | null>(null);
+  const [customEquipmentName, setCustomEquipmentName] = useState<string | null>(
+    null,
+  );
+  const [dateRange, setDateRange] = useState<{
+    start: string;
+    end: string;
+  } | null>(null);
   const calendarRef = useRef<FullCalendar>(null);
   const queryClient = useQueryClient();
 
   const {
     isOpen: isEquipmentModalOpen,
     onOpen: onEquipmentModalOpen,
-    onClose: onEquipmentModalClose
+    onClose: onEquipmentModalClose,
   } = useDisclosure();
 
   const {
     isOpen: isFormModalOpen,
     onOpen: onFormModalOpen,
-    onClose: onFormModalClose
+    onClose: onFormModalClose,
   } = useDisclosure();
 
   // カテゴリ一覧取得
   const { data: categories } = useQuery({
-    queryKey: ['categories'],
-    queryFn: getCategories
+    queryKey: ["categories"],
+    queryFn: getCategories,
   });
 
   // 選択日の予約可能機器取得
   const { data: availableEquipment, isLoading: isLoadingEquipment } = useQuery({
-    queryKey: ['availableEquipment', selectedDate, categoryFilter],
+    queryKey: ["availableEquipment", selectedDate, categoryFilter],
     queryFn: () =>
-      getAvailableEquipment(
-        selectedDate!,
-        categoryFilter ? Number(categoryFilter) : undefined
-      ),
-    enabled: !!selectedDate
+      getAvailableEquipment(selectedDate!, categoryFilter || undefined),
+    enabled: !!selectedDate,
   });
 
   // カレンダーイベント取得
   const { data: calendarEvents } = useQuery({
-    queryKey: ['calendarEvents', dateRange?.start, dateRange?.end],
+    queryKey: ["calendarEvents", dateRange?.start, dateRange?.end],
     queryFn: () => getCalendarEvents(dateRange!.start, dateRange!.end),
-    enabled: !!dateRange
+    enabled: !!dateRange,
   });
 
   // カレンダーの日付範囲変更時
-  const handleDatesSet = useCallback((dateInfo: { startStr: string; endStr: string }) => {
-    setDateRange({ start: dateInfo.startStr, end: dateInfo.endStr });
-  }, []);
+  const handleDatesSet = useCallback(
+    (dateInfo: { startStr: string; endStr: string }) => {
+      setDateRange({ start: dateInfo.startStr, end: dateInfo.endStr });
+    },
+    [],
+  );
 
   // 日付クリック時
-  const handleDateClick = useCallback((info: { dateStr: string }) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const clickedDate = new Date(info.dateStr);
+  const handleDateClick = useCallback(
+    (info: { dateStr: string }) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const clickedDate = new Date(info.dateStr);
 
-    // 過去の日付は選択不可
-    if (clickedDate < today) {
-      return;
-    }
+      // 過去の日付は選択不可
+      if (clickedDate < today) {
+        return;
+      }
 
-    setSelectedDate(info.dateStr);
-    onEquipmentModalOpen();
-  }, [onEquipmentModalOpen]);
+      setSelectedDate(info.dateStr);
+      onEquipmentModalOpen();
+    },
+    [onEquipmentModalOpen],
+  );
 
   // 機器選択時
   const handleEquipmentSelect = (equipment: AvailableEquipment) => {
@@ -112,7 +125,7 @@ export default function ReservationCalendar() {
   const handleReservationComplete = () => {
     handleFormModalClose();
     // カレンダーイベントを再取得
-    queryClient.invalidateQueries({ queryKey: ['calendarEvents'] });
+    queryClient.invalidateQueries({ queryKey: ["calendarEvents"] });
   };
 
   return (
@@ -144,9 +157,15 @@ export default function ReservationCalendar() {
 
       <Box bg="white" p={4} borderRadius="md" shadow="sm">
         <HStack mb={4} spacing={4}>
-          <Badge colorScheme="green" px={2} py={1}>予約可能</Badge>
-          <Badge colorScheme="yellow" px={2} py={1}>残りわずか</Badge>
-          <Badge colorScheme="gray" px={2} py={1}>過去の日付</Badge>
+          <Badge colorScheme="green" px={2} py={1}>
+            予約可能
+          </Badge>
+          <Badge colorScheme="yellow" px={2} py={1}>
+            残りわずか
+          </Badge>
+          <Badge colorScheme="gray" px={2} py={1}>
+            過去の日付
+          </Badge>
         </HStack>
 
         <FullCalendar
@@ -155,14 +174,14 @@ export default function ReservationCalendar() {
           initialView="dayGridMonth"
           locale="ja"
           headerToolbar={{
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,dayGridWeek'
+            left: "prev,next today",
+            center: "title",
+            right: "dayGridMonth,dayGridWeek",
           }}
           buttonText={{
-            today: '今日',
-            month: '月',
-            week: '週'
+            today: "今日",
+            month: "月",
+            week: "週",
           }}
           height="auto"
           events={calendarEvents || []}
@@ -173,9 +192,9 @@ export default function ReservationCalendar() {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             if (arg.date < today) {
-              return ['past-date'];
+              return ["past-date"];
             }
-            return ['future-date'];
+            return ["future-date"];
           }}
         />
       </Box>

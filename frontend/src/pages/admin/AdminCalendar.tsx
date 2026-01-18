@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from "react";
 import {
   Box,
   Heading,
@@ -17,86 +17,107 @@ import {
   Text,
   Button,
   useToast,
-  Spinner
-} from '@chakra-ui/react';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import timeGridPlugin from '@fullcalendar/timegrid';
-import interactionPlugin from '@fullcalendar/interaction';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+  Spinner,
+} from "@chakra-ui/react";
+import FullCalendar from "@fullcalendar/react";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import timeGridPlugin from "@fullcalendar/timegrid";
+import interactionPlugin from "@fullcalendar/interaction";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getCalendarEvents,
   type CalendarEvent,
-  updateReservation
-} from '../../api/reservation';
-import { ReservationStatus } from '../../types/reservation';
+  updateReservation,
+} from "../../api/reservation";
+import { ReservationStatus } from "../../types/reservation";
 
 export default function AdminCalendar() {
-  const [currentView, setCurrentView] = useState<'dayGridMonth' | 'timeGridWeek' | 'timeGridDay'>('dayGridMonth');
-  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [currentView, setCurrentView] = useState<
+    "dayGridMonth" | "timeGridWeek" | "timeGridDay"
+  >("dayGridMonth");
+  const [dateRange, setDateRange] = useState<{
+    start: string;
+    end: string;
+  } | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
+    null,
+  );
   const calendarRef = useRef<FullCalendar | null>(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
   const queryClient = useQueryClient();
 
   const { data: events, isLoading } = useQuery({
-    queryKey: ['calendarEvents', 'admin', dateRange?.start, dateRange?.end],
+    queryKey: ["calendarEvents", "admin", dateRange?.start, dateRange?.end],
     queryFn: () => getCalendarEvents(dateRange!.start, dateRange!.end),
-    enabled: !!dateRange
+    enabled: !!dateRange,
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: ReservationStatus }) =>
+    mutationFn: ({ id, status }: { id: string; status: ReservationStatus }) =>
       updateReservation(id, { status } as any),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['calendarEvents'] });
+      queryClient.invalidateQueries({ queryKey: ["calendarEvents"] });
       toast({
-        title: '予約を更新しました',
-        status: 'success',
-        duration: 2000
+        title: "予約を更新しました",
+        status: "success",
+        duration: 2000,
       });
       onClose();
       setSelectedEvent(null);
     },
     onError: () => {
       toast({
-        title: '更新に失敗しました',
-        status: 'error',
-        duration: 3000
+        title: "更新に失敗しました",
+        status: "error",
+        duration: 3000,
       });
-    }
+    },
   });
 
-  const handleDatesSet = useCallback((dateInfo: { startStr: string; endStr: string }) => {
-    setDateRange({ start: dateInfo.startStr, end: dateInfo.endStr });
-  }, []);
+  const handleDatesSet = useCallback(
+    (dateInfo: { startStr: string; endStr: string }) => {
+      setDateRange({ start: dateInfo.startStr, end: dateInfo.endStr });
+    },
+    [],
+  );
 
-  const handleEventClick = useCallback((clickInfo: any) => {
-    const event: CalendarEvent = clickInfo.event.extendedProps.fullData || {
-      id: clickInfo.event.id,
-      title: clickInfo.event.title,
-      start: clickInfo.event.startStr,
-      end: clickInfo.event.endStr,
-      extendedProps: clickInfo.event.extendedProps,
-      backgroundColor: clickInfo.event.backgroundColor,
-      borderColor: clickInfo.event.borderColor
-    };
-    setSelectedEvent(event);
-    onOpen();
-  }, [onOpen]);
+  const handleEventClick = useCallback(
+    (clickInfo: any) => {
+      const event: CalendarEvent = clickInfo.event.extendedProps.fullData || {
+        id: clickInfo.event.id,
+        title: clickInfo.event.title,
+        start: clickInfo.event.startStr,
+        end: clickInfo.event.endStr,
+        extendedProps: clickInfo.event.extendedProps,
+        backgroundColor: clickInfo.event.backgroundColor,
+        borderColor: clickInfo.event.borderColor,
+      };
+      setSelectedEvent(event);
+      onOpen();
+    },
+    [onOpen],
+  );
 
   const handleApprove = () => {
     if (!selectedEvent) return;
-    updateMutation.mutate({ id: Number(selectedEvent.id), status: ReservationStatus.APPROVED });
+    updateMutation.mutate({
+      id: selectedEvent.id,
+      status: ReservationStatus.APPROVED,
+    });
   };
 
   const handleReject = () => {
     if (!selectedEvent) return;
-    updateMutation.mutate({ id: Number(selectedEvent.id), status: ReservationStatus.REJECTED });
+    updateMutation.mutate({
+      id: selectedEvent.id,
+      status: ReservationStatus.REJECTED,
+    });
   };
 
-  const handleViewChange = (view: 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay') => {
+  const handleViewChange = (
+    view: "dayGridMonth" | "timeGridWeek" | "timeGridDay",
+  ) => {
     setCurrentView(view);
     const calendarApi = calendarRef.current?.getApi();
     calendarApi?.changeView(view);
@@ -111,7 +132,14 @@ export default function AdminCalendar() {
             aria-label="カレンダービュー切り替え"
             title="カレンダービュー切り替え"
             value={currentView}
-            onChange={(e) => handleViewChange(e.target.value as 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay')}
+            onChange={(e) =>
+              handleViewChange(
+                e.target.value as
+                  | "dayGridMonth"
+                  | "timeGridWeek"
+                  | "timeGridDay",
+              )
+            }
             maxW="200px"
             bg="white"
           >
@@ -141,15 +169,15 @@ export default function AdminCalendar() {
             initialView={currentView}
             locale="ja"
             headerToolbar={{
-              left: 'prev,next today',
-              center: 'title',
-              right: 'dayGridMonth,timeGridWeek,timeGridDay'
+              left: "prev,next today",
+              center: "title",
+              right: "dayGridMonth,timeGridWeek,timeGridDay",
             }}
             buttonText={{
-              today: '今日',
-              month: '月',
-              week: '週',
-              day: '日'
+              today: "今日",
+              month: "月",
+              week: "週",
+              day: "日",
             }}
             height="auto"
             events={events || []}
@@ -192,24 +220,26 @@ export default function AdminCalendar() {
             )}
           </ModalBody>
           <ModalFooter>
-            {selectedEvent && selectedEvent.extendedProps.status === ReservationStatus.PENDING && (
-              <HStack spacing={3}>
-                <Button
-                  colorScheme="green"
-                  onClick={handleApprove}
-                  isLoading={updateMutation.isPending}
-                >
-                  承認
-                </Button>
-                <Button
-                  colorScheme="red"
-                  onClick={handleReject}
-                  isLoading={updateMutation.isPending}
-                >
-                  却下
-                </Button>
-              </HStack>
-            )}
+            {selectedEvent &&
+              selectedEvent.extendedProps.status ===
+                ReservationStatus.PENDING && (
+                <HStack spacing={3}>
+                  <Button
+                    colorScheme="green"
+                    onClick={handleApprove}
+                    isLoading={updateMutation.isPending}
+                  >
+                    承認
+                  </Button>
+                  <Button
+                    colorScheme="red"
+                    onClick={handleReject}
+                    isLoading={updateMutation.isPending}
+                  >
+                    却下
+                  </Button>
+                </HStack>
+              )}
             <Button ml={3} variant="ghost" onClick={onClose}>
               閉じる
             </Button>

@@ -4,19 +4,19 @@ import {
   Column,
   OneToMany,
   CreateDateColumn,
-  UpdateDateColumn
-} from 'typeorm';
-import { Equipment } from './Equipment';
+  UpdateDateColumn,
+} from "typeorm";
+import { Equipment } from "./Equipment";
 
 @Entity()
 export class EquipmentCategory {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column({ unique: true })
+  @Column({ type: "varchar", unique: true })
   name!: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: "text", nullable: true })
   description?: string;
 
   @OneToMany(() => Equipment, (equipment) => equipment.category)

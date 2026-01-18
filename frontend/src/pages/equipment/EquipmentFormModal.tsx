@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 import {
   Modal,
   ModalOverlay,
@@ -24,12 +24,16 @@ import {
   useToast,
   Image,
   Checkbox,
-  Text
-} from '@chakra-ui/react';
-import { useForm, Controller } from 'react-hook-form';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createEquipment, updateEquipment, getCategories } from '../../api/equipment';
-import type { Equipment, EquipmentInput } from '../../types/equipment';
+  Text,
+} from "@chakra-ui/react";
+import { useForm, Controller } from "react-hook-form";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  createEquipment,
+  updateEquipment,
+  getCategories,
+} from "../../api/equipment";
+import type { Equipment, EquipmentInput } from "../../types/equipment";
 
 interface Props {
   isOpen: boolean;
@@ -38,7 +42,12 @@ interface Props {
   isEditMode: boolean;
 }
 
-export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditMode }: Props) {
+export default function EquipmentFormModal({
+  isOpen,
+  onClose,
+  equipment,
+  isEditMode,
+}: Props) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -50,26 +59,26 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
     reset,
     watch,
     setValue,
-    formState: { errors, isSubmitting }
+    formState: { errors, isSubmitting },
   } = useForm<EquipmentInput>({
     defaultValues: {
-      name: '',
-      description: '',
+      name: "",
+      description: "",
       quantity: 1,
-      location: '',
+      location: "",
       categoryId: undefined,
       isActive: true,
       imageFile: undefined,
-      removeImage: false
-    }
+      removeImage: false,
+    },
   });
 
-  const watchImageFile = watch('imageFile');
+  const watchImageFile = watch("imageFile");
 
   // カテゴリ一覧取得
   const { data: categories } = useQuery({
-    queryKey: ['categories'],
-    queryFn: getCategories
+    queryKey: ["categories"],
+    queryFn: getCategories,
   });
 
   // フォームリセット
@@ -78,24 +87,24 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
       if (isEditMode && equipment) {
         reset({
           name: equipment.name,
-          description: equipment.description || '',
+          description: equipment.description || "",
           quantity: equipment.quantity,
-          location: equipment.location || '',
+          location: equipment.location || "",
           categoryId: equipment.category?.id,
           isActive: equipment.isActive,
           imageFile: undefined,
-          removeImage: false
+          removeImage: false,
         });
       } else {
         reset({
-          name: '',
-          description: '',
+          name: "",
+          description: "",
           quantity: 1,
-          location: '',
+          location: "",
           categoryId: undefined,
           isActive: true,
           imageFile: undefined,
-          removeImage: false
+          removeImage: false,
         });
       }
       setPreviewUrl(null);
@@ -107,7 +116,7 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
       const file = watchImageFile[0];
       const objectUrl = URL.createObjectURL(file);
       setPreviewUrl(objectUrl);
-      setValue('removeImage', false);
+      setValue("removeImage", false);
       return () => {
         URL.revokeObjectURL(objectUrl);
       };
@@ -117,31 +126,31 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
 
   const buildFormData = (data: EquipmentInput) => {
     const formData = new FormData();
-    formData.append('name', data.name);
-    formData.append('quantity', String(data.quantity));
+    formData.append("name", data.name);
+    formData.append("quantity", String(data.quantity));
 
     if (data.description) {
-      formData.append('description', data.description);
+      formData.append("description", data.description);
     }
     if (data.location) {
-      formData.append('location', data.location);
+      formData.append("location", data.location);
     }
     if (data.categoryId !== undefined && data.categoryId !== null) {
-      formData.append('categoryId', String(data.categoryId));
+      formData.append("categoryId", String(data.categoryId));
     } else if (data.categoryId === null) {
-      formData.append('categoryId', '');
+      formData.append("categoryId", "");
     }
-    if (typeof data.isActive === 'boolean') {
-      formData.append('isActive', String(data.isActive));
+    if (typeof data.isActive === "boolean") {
+      formData.append("isActive", String(data.isActive));
     }
     if (data.specifications) {
-      formData.append('specifications', JSON.stringify(data.specifications));
+      formData.append("specifications", JSON.stringify(data.specifications));
     }
     if (data.imageFile && data.imageFile.length > 0) {
-      formData.append('image', data.imageFile[0]);
+      formData.append("image", data.imageFile[0]);
     }
     if (data.removeImage) {
-      formData.append('removeImage', 'true');
+      formData.append("removeImage", "true");
     }
 
     return formData;
@@ -151,39 +160,43 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
   const createMutation = useMutation({
     mutationFn: createEquipment,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['equipment'] });
-      toast({ title: '資機材を登録しました', status: 'success', duration: 3000 });
+      queryClient.invalidateQueries({ queryKey: ["equipment"] });
+      toast({
+        title: "資機材を登録しました",
+        status: "success",
+        duration: 3000,
+      });
       onClose();
     },
     onError: () => {
-      toast({ title: '登録に失敗しました', status: 'error', duration: 3000 });
-    }
+      toast({ title: "登録に失敗しました", status: "error", duration: 3000 });
+    },
   });
 
   // 更新処理
   const updateMutation = useMutation({
     mutationFn: (data: FormData) => updateEquipment(equipment!.id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['equipment'] });
-      toast({ title: '資機材を更新しました', status: 'success', duration: 3000 });
+      queryClient.invalidateQueries({ queryKey: ["equipment"] });
+      toast({
+        title: "資機材を更新しました",
+        status: "success",
+        duration: 3000,
+      });
       onClose();
     },
     onError: () => {
-      toast({ title: '更新に失敗しました', status: 'error', duration: 3000 });
-    }
+      toast({ title: "更新に失敗しました", status: "error", duration: 3000 });
+    },
   });
 
   const onSubmit = (data: EquipmentInput) => {
     const normalizedCategoryId =
-      data.categoryId === undefined
-        ? undefined
-        : data.categoryId
-            ? Number(data.categoryId)
-            : null;
+      data.categoryId === undefined ? undefined : data.categoryId || null;
 
     const formData = buildFormData({
       ...data,
-      categoryId: normalizedCategoryId
+      categoryId: normalizedCategoryId,
     });
 
     if (isEditMode) {
@@ -198,7 +211,7 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
       <ModalOverlay />
       <ModalContent>
         <form onSubmit={handleSubmit(onSubmit)} encType="multipart/form-data">
-          <ModalHeader>{isEditMode ? '資機材編集' : '資機材登録'}</ModalHeader>
+          <ModalHeader>{isEditMode ? "資機材編集" : "資機材登録"}</ModalHeader>
           <ModalCloseButton />
 
           <ModalBody>
@@ -206,7 +219,7 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
               <FormControl isRequired isInvalid={!!errors.name}>
                 <FormLabel>名称</FormLabel>
                 <Input
-                  {...register('name', { required: '名称は必須です' })}
+                  {...register("name", { required: "名称は必須です" })}
                   placeholder="例: AED"
                 />
               </FormControl>
@@ -214,7 +227,7 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
               <FormControl>
                 <FormLabel>カテゴリ</FormLabel>
                 <Select
-                  {...register('categoryId')}
+                  {...register("categoryId")}
                   placeholder="カテゴリを選択"
                 >
                   {categories?.map((cat) => (
@@ -250,7 +263,7 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
               <FormControl>
                 <FormLabel>保管場所</FormLabel>
                 <Input
-                  {...register('location')}
+                  {...register("location")}
                   placeholder="例: 医療安全管理室"
                 />
               </FormControl>
@@ -258,7 +271,7 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
               <FormControl>
                 <FormLabel>説明</FormLabel>
                 <Textarea
-                  {...register('description')}
+                  {...register("description")}
                   placeholder="資機材の説明や注意事項"
                   rows={3}
                 />
@@ -269,13 +282,15 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
                 <Input
                   type="file"
                   accept="image/*"
-                  {...register('imageFile')}
+                  {...register("imageFile")}
                 />
-                <FormHelperText>5MB以下の画像ファイルをアップロードできます</FormHelperText>
+                <FormHelperText>
+                  5MB以下の画像ファイルをアップロードできます
+                </FormHelperText>
                 {(previewUrl || equipment?.imageUrl) && (
                   <VStack align="flex-start" spacing={2} mt={3} w="100%">
                     <Image
-                      src={previewUrl || equipment?.imageUrl || ''}
+                      src={previewUrl || equipment?.imageUrl || ""}
                       alt="資機材画像プレビュー"
                       maxH="200px"
                       borderRadius="md"
@@ -286,8 +301,9 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
                         新しい画像を選択すると保存時に既存画像が置き換わります
                       </Text>
                     ) : (
-                      isEditMode && equipment?.imageUrl && (
-                        <Checkbox {...register('removeImage')}>
+                      isEditMode &&
+                      equipment?.imageUrl && (
+                        <Checkbox {...register("removeImage")}>
                           既存画像を削除する
                         </Checkbox>
                       )
@@ -325,9 +341,13 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, isEditM
             <Button
               type="submit"
               colorScheme="blue"
-              isLoading={isSubmitting || createMutation.isPending || updateMutation.isPending}
+              isLoading={
+                isSubmitting ||
+                createMutation.isPending ||
+                updateMutation.isPending
+              }
             >
-              {isEditMode ? '更新' : '登録'}
+              {isEditMode ? "更新" : "登録"}
             </Button>
           </ModalFooter>
         </form>

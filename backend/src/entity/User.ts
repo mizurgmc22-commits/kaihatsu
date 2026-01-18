@@ -6,56 +6,56 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   BeforeInsert,
-  BeforeUpdate
-} from 'typeorm';
-import { Reservation } from './Reservation';
+  BeforeUpdate,
+} from "typeorm";
+import { Reservation } from "./Reservation";
 
-export type UserRole = 'user' | 'admin' | 'system_admin';
+export type UserRole = "user" | "admin" | "system_admin";
 
 @Entity()
 export class User {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
+  @Column({ type: "varchar" })
   name!: string;
 
-  @Column({ unique: true })
+  @Column({ type: "varchar", unique: true })
   email!: string;
 
-  @Column({ select: false })
+  @Column({ type: "varchar", select: false })
   password!: string;
 
-  @Column({ type: 'varchar', default: 'user' })
+  @Column({ type: "varchar", default: "user" })
   role!: UserRole;
 
-  @Column()
+  @Column({ type: "varchar" })
   department!: string;
 
-  @Column({ name: 'phone_number', nullable: true })
+  @Column({ type: "varchar", name: "phone_number", nullable: true })
   phoneNumber?: string;
 
-  @Column({ name: 'extension_number', nullable: true })
+  @Column({ type: "varchar", name: "extension_number", nullable: true })
   extensionNumber?: string;
 
-  @Column({ default: true })
+  @Column({ type: "boolean", default: true })
   isActive!: boolean;
 
-  @Column({ name: 'last_login_at', type: 'datetime', nullable: true })
+  @Column({ name: "last_login_at", type: "datetime", nullable: true })
   lastLoginAt?: Date;
 
   @OneToMany(() => Reservation, (reservation) => reservation.user, {
-    cascade: true
+    cascade: true,
   })
   reservations!: Reservation[];
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: "updated_at" })
   updatedAt!: Date;
 
-  @Column({ name: 'deleted_at', type: 'datetime', nullable: true })
+  @Column({ name: "deleted_at", type: "datetime", nullable: true })
   deletedAt?: Date;
 
   @BeforeInsert()

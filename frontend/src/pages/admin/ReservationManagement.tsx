@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Box,
   Heading,
@@ -21,66 +21,71 @@ import {
   Text,
   Flex,
   FormControl,
-  FormLabel
-} from '@chakra-ui/react';
-import { FiCheck, FiX, FiEye } from 'react-icons/fi';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getReservations, updateReservation, getExportUrl } from '../../api/reservation';
+  FormLabel,
+} from "@chakra-ui/react";
+import { FiCheck, FiX, FiEye } from "react-icons/fi";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  getReservations,
+  updateReservation,
+  getExportUrl,
+} from "../../api/reservation";
 
 export default function ReservationManagement() {
-  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>("");
   const [page, setPage] = useState(1);
   const toast = useToast();
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['reservations', 'admin', statusFilter, page],
-    queryFn: () => getReservations({ 
-      status: statusFilter || undefined, 
-      page, 
-      limit: 20 
-    })
+    queryKey: ["reservations", "admin", statusFilter, page],
+    queryFn: () =>
+      getReservations({
+        status: statusFilter || undefined,
+        page,
+        limit: 20,
+      }),
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) =>
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
       updateReservation(id, { status } as any),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reservations'] });
+      queryClient.invalidateQueries({ queryKey: ["reservations"] });
       toast({
-        title: '予約を更新しました',
-        status: 'success',
-        duration: 2000
+        title: "予約を更新しました",
+        status: "success",
+        duration: 2000,
       });
     },
     onError: () => {
       toast({
-        title: '更新に失敗しました',
-        status: 'error',
-        duration: 3000
+        title: "更新に失敗しました",
+        status: "error",
+        duration: 3000,
       });
-    }
+    },
   });
 
-  const handleApprove = (id: number) => {
-    updateMutation.mutate({ id, status: 'approved' });
+  const handleApprove = (id: string) => {
+    updateMutation.mutate({ id, status: "approved" });
   };
 
-  const handleReject = (id: number) => {
-    updateMutation.mutate({ id, status: 'rejected' });
+  const handleReject = (id: string) => {
+    updateMutation.mutate({ id, status: "rejected" });
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'pending':
+      case "pending":
         return <Badge colorScheme="yellow">承認待ち</Badge>;
-      case 'approved':
+      case "approved":
         return <Badge colorScheme="green">承認済み</Badge>;
-      case 'rejected':
+      case "rejected":
         return <Badge colorScheme="red">却下</Badge>;
-      case 'cancelled':
+      case "cancelled":
         return <Badge colorScheme="gray">キャンセル</Badge>;
-      case 'completed':
+      case "completed":
         return <Badge colorScheme="blue">完了</Badge>;
       default:
         return <Badge>{status}</Badge>;
@@ -89,12 +94,12 @@ export default function ReservationManagement() {
 
   const formatDateTime = (dateStr: string) => {
     const d = new Date(dateStr);
-    return d.toLocaleString('ja-JP', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    return d.toLocaleString("ja-JP", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -170,20 +175,21 @@ export default function ReservationManagement() {
                   {data?.items.map((r) => (
                     <Tr key={r.id}>
                       <Td>{r.id}</Td>
-                      <Td>{r.equipment?.name || r.customEquipmentName || '未設定'}</Td>
+                      <Td>
+                        {r.equipment?.name || r.customEquipmentName || "未設定"}
+                      </Td>
                       <Td>{r.department}</Td>
                       <Td>{r.applicantName}</Td>
                       <Td>{r.contactInfo}</Td>
                       <Td fontSize="xs">
                         {formatDateTime(r.startTime)}
-                        <br />
-                        〜 {formatDateTime(r.endTime)}
+                        <br />〜 {formatDateTime(r.endTime)}
                       </Td>
                       <Td>{r.quantity}</Td>
                       <Td>{getStatusBadge(r.status)}</Td>
                       <Td>
                         <HStack spacing={1}>
-                          {r.status === 'pending' && (
+                          {r.status === "pending" && (
                             <>
                               <Tooltip label="承認">
                                 <IconButton

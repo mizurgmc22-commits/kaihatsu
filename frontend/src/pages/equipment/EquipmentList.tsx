@@ -71,7 +71,7 @@ export default function EquipmentList() {
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [page, setPage] = useState(1);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(
-    null
+    null,
   );
   const [isEditMode, setIsEditMode] = useState(false);
 
@@ -81,9 +81,7 @@ export default function EquipmentList() {
     queryFn: () =>
       getEquipmentList({
         search: search || undefined,
-        categoryId: categoryFilter ? Number(categoryFilter) : undefined,
-        page,
-        limit: 20,
+        categoryId: categoryFilter || undefined,
       }),
   });
 
@@ -224,7 +222,7 @@ export default function EquipmentList() {
                     {data?.items.map((equipment) => {
                       const imageSrc = resolveEquipmentImage(
                         equipment.name,
-                        equipment.imageUrl
+                        equipment.imageUrl,
                       );
                       return (
                         <Tr key={equipment.id}>

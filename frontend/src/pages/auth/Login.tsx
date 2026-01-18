@@ -1,5 +1,5 @@
-import { FormEvent, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { FormEvent, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
@@ -13,15 +13,15 @@ import {
   Container,
   Alert,
   AlertIcon,
-  Link
-} from '@chakra-ui/react';
-import { useAuth } from '../../contexts/AuthContext';
+  Link,
+} from "@chakra-ui/react";
+import { useAuth } from "../../contexts/AuthContext";
 
 const Login = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const toast = useToast();
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -29,19 +29,20 @@ const Login = () => {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError('');
-    
+    setError("");
+
     try {
       await login(email, password);
+      console.log("Login successful, Navigating to /admin...");
       toast({
-        title: 'ログインに成功しました',
-        status: 'success',
+        title: "ログインに成功しました",
+        status: "success",
         duration: 2000,
         isClosable: true,
       });
-      navigate('/admin');
+      navigate("/admin");
     } catch (err: any) {
-      setError(err.response?.data?.message || 'ログインに失敗しました');
+      setError(err.message || "ログインに失敗しました");
     } finally {
       setIsLoading(false);
     }
@@ -54,7 +55,7 @@ const Login = () => {
           <Heading as="h1" size="lg" mb={6} textAlign="center">
             管理者ログイン
           </Heading>
-          
+
           {error && (
             <Alert status="error" mb={4} borderRadius="md">
               <AlertIcon />
@@ -94,9 +95,9 @@ const Login = () => {
               </Button>
             </VStack>
           </form>
-          
+
           <Text mt={6} textAlign="center" fontSize="sm" color="gray.500">
-            ユーザー向け予約画面は{' '}
+            ユーザー向け予約画面は{" "}
             <Link href="/" color="blue.500">
               こちら
             </Link>

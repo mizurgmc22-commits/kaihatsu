@@ -1,22 +1,23 @@
-import type { Equipment } from './equipment';
+import type { Equipment } from "./equipment";
 
 export enum ReservationStatus {
-  PENDING = 'pending',
-  APPROVED = 'approved',
-  REJECTED = 'rejected',
-  CANCELLED = 'cancelled',
-  COMPLETED = 'completed'
+  PENDING = "pending",
+  APPROVED = "approved",
+  REJECTED = "rejected",
+  CANCELLED = "cancelled",
+  COMPLETED = "completed",
 }
 
 export interface User {
-  id: number;
+  id: string;
   name: string;
   email: string;
   department?: string;
 }
 
 export interface Reservation {
-  id: number;
+  id: string;
+  equipmentId?: string;
   equipment?: Equipment | null;
   customEquipmentName?: string;
   user?: User;
@@ -35,7 +36,7 @@ export interface Reservation {
 }
 
 export interface ReservationInput {
-  equipmentId?: number;
+  equipmentId?: string;
   customEquipmentName?: string;
   department: string;
   applicantName: string;
@@ -55,7 +56,7 @@ export interface AvailableEquipment extends Equipment {
 }
 
 export interface DailyReservation {
-  id: number;
+  id: string;
   quantity: number;
   purpose?: string;
   userName: string;
@@ -69,7 +70,7 @@ export interface DailyAvailability {
 
 export interface CalendarData {
   equipment: {
-    id: number;
+    id: string;
     name: string;
     totalQuantity: number;
   };

@@ -1,6 +1,6 @@
 // 資機材カテゴリ
 export interface EquipmentCategory {
-  id: number;
+  id: string;
   name: string;
   description?: string;
   equipmentCount?: number;
@@ -10,7 +10,7 @@ export interface EquipmentCategory {
 
 // 資機材
 export interface Equipment {
-  id: number;
+  id: string;
   name: string;
   description?: string;
   quantity: number;
@@ -23,7 +23,7 @@ export interface Equipment {
   updatedAt: string;
 }
 
-// ページネーション
+// ページネーション (Firestoreでは仕様が変わる可能性があるが一旦維持)
 export interface Pagination {
   page: number;
   limit: number;
@@ -43,7 +43,7 @@ export interface EquipmentInput {
   description?: string;
   quantity: number;
   location?: string;
-  categoryId?: number | null;
+  categoryId?: string | null;
   specifications?: Record<string, unknown>;
   isActive?: boolean;
   imageFile?: FileList;

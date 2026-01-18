@@ -1,17 +1,29 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { apiClient } from '../api/client';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  User as FirebaseUser,
+} from "firebase/auth";
+import { auth, db } from "../lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 interface User {
-  id: number;
+  id: string;
   name: string;
   email: string;
-  role: 'user' | 'admin' | 'system_admin';
+  role: "user" | "admin" | "system_admin";
   department: string;
 }
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
   isLoading: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -22,50 +34,68 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(() => 
-    localStorage.getItem('token')
-  );
   const [isLoading, setIsLoading] = useState(true);
 
-  const isAdmin = user?.role === 'admin' || user?.role === 'system_admin';
+  const isAdmin = user?.role === "admin" || user?.role === "system_admin";
 
-  // 初期化時にトークンがあればユーザー情報を取得
   useEffect(() => {
-    const initAuth = async () => {
-      if (token) {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log(
+        "Auth state changed. User:",
+        firebaseUser?.email,
+        "UID:",
+        firebaseUser?.uid,
+      );
+      if (firebaseUser) {
+        // Firestoreから追加のユーザー情報を取得
         try {
-          const response = await apiClient.get('/auth/me');
-          setUser(response.data);
-        } catch {
-          // トークンが無効な場合はクリア
-          localStorage.removeItem('token');
-          setToken(null);
+          console.log("Fetching Firestore doc for UID:", firebaseUser.uid);
+          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+          if (userDoc.exists()) {
+            console.log("User doc found:", userDoc.data());
+            const userData = userDoc.data() as Omit<User, "id" | "email">;
+            setUser({
+              id: firebaseUser.uid,
+              email: firebaseUser.email || "",
+              ...userData,
+            });
+          } else {
+            // ドキュメントがない場合は最小限の情報
+            console.warn(
+              "User doc NOT found in Firestore for UID:",
+              firebaseUser.uid,
+            );
+            setUser({
+              id: firebaseUser.uid,
+              email: firebaseUser.email || "",
+              name: firebaseUser.displayName || "ユーザー",
+              role: "user",
+              department: "未設定",
+            });
+          }
+        } catch (error) {
+          console.error("Error fetching user data:", error);
           setUser(null);
         }
+      } else {
+        setUser(null);
       }
       setIsLoading(false);
-    };
+    });
 
-    initAuth();
-  }, [token]);
+    return () => unsubscribe();
+  }, []);
 
   const login = async (email: string, password: string) => {
-    const response = await apiClient.post('/auth/login', { email, password });
-    const { token: newToken, user: userData } = response.data;
-    
-    localStorage.setItem('token', newToken);
-    setToken(newToken);
-    setUser(userData);
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
-    setUser(null);
+  const logout = async () => {
+    await signOut(auth);
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, isAdmin, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, isAdmin, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
@@ -74,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }

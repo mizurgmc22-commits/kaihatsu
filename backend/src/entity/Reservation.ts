@@ -4,17 +4,17 @@ import {
   Column,
   ManyToOne,
   CreateDateColumn,
-  UpdateDateColumn
-} from 'typeorm';
-import { User } from './User';
-import { Equipment } from './Equipment';
+  UpdateDateColumn,
+} from "typeorm";
+import { User } from "./User";
+import { Equipment } from "./Equipment";
 
 export enum ReservationStatus {
-  PENDING = 'pending',
-  APPROVED = 'approved',
-  REJECTED = 'rejected',
-  CANCELLED = 'cancelled',
-  COMPLETED = 'completed'
+  PENDING = "pending",
+  APPROVED = "approved",
+  REJECTED = "rejected",
+  CANCELLED = "cancelled",
+  COMPLETED = "completed",
 }
 
 @Entity()
@@ -22,47 +22,50 @@ export class Reservation {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @ManyToOne(() => User, (user) => user.reservations, { nullable: true, onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.reservations, {
+    nullable: true,
+    onDelete: "CASCADE",
+  })
   user?: User;
 
   @ManyToOne(() => Equipment, (equipment) => equipment.reservations, {
     nullable: true,
-    onDelete: 'CASCADE'
+    onDelete: "CASCADE",
   })
   equipment?: Equipment | null;
 
-  @Column({ nullable: true })
+  @Column({ type: "varchar", nullable: true })
   customEquipmentName?: string;
 
   // 申請者情報
-  @Column({ nullable: false })
+  @Column({ type: "varchar", nullable: false })
   department!: string;
 
-  @Column({ nullable: false })
+  @Column({ type: "varchar", nullable: false })
   applicantName!: string;
 
-  @Column({ nullable: false })
+  @Column({ type: "varchar", nullable: false })
   contactInfo!: string;
 
-  @Column('datetime')
+  @Column("datetime")
   startTime!: Date;
 
-  @Column('datetime')
+  @Column("datetime")
   endTime!: Date;
 
-  @Column('int', { default: 1 })
+  @Column("int", { default: 1 })
   quantity!: number;
 
-  @Column('text', { nullable: true })
+  @Column("text", { nullable: true })
   purpose?: string;
 
-  @Column('text', { nullable: true })
+  @Column("text", { nullable: true })
   location?: string;
-  
-  @Column('varchar', { length: 20, default: 'pending' })
+
+  @Column("varchar", { length: 20, default: "pending" })
   status!: string;
 
-  @Column('text', { nullable: true })
+  @Column("text", { nullable: true })
   notes?: string;
 
   @CreateDateColumn()

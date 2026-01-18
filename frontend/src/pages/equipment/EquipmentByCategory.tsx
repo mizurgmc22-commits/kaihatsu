@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo } from "react";
 import {
   Box,
   Heading,
@@ -13,28 +13,30 @@ import {
   Td,
   Spinner,
   Flex,
-  Divider
-} from '@chakra-ui/react';
-import { useQuery } from '@tanstack/react-query';
-import { getEquipmentList } from '../../api/equipment';
-import type { Equipment } from '../../types/equipment';
+  Divider,
+} from "@chakra-ui/react";
+import { useQuery } from "@tanstack/react-query";
+import { getEquipmentList } from "../../api/equipment";
+import type { Equipment } from "../../types/equipment";
 
-const CATEGORY_ORDER = ['蘇生講習資機材', 'トレーニング資機材', '機械類', '消耗品', 'その他'];
+const CATEGORY_ORDER = [
+  "蘇生講習資機材",
+  "トレーニング資機材",
+  "機械類",
+  "消耗品",
+  "その他",
+];
 
 export default function EquipmentByCategory() {
   const { data, isLoading, error } = useQuery({
-    queryKey: ['equipment', { view: 'by-category' }],
-    queryFn: () =>
-      getEquipmentList({
-        page: 1,
-        limit: 1000 // カテゴリ別表示用に十分大きな件数を取得
-      })
+    queryKey: ["equipment", { view: "by-category" }],
+    queryFn: () => getEquipmentList(),
   });
 
   const grouped = useMemo(() => {
     const map: Record<string, Equipment[]> = {};
     (data?.items || []).forEach((e) => {
-      const name = e.category?.name || 'その他';
+      const name = e.category?.name || "その他";
       if (!map[name]) map[name] = [];
       map[name].push(e);
     });
@@ -85,10 +87,10 @@ export default function EquipmentByCategory() {
                       <Tr key={e.id}>
                         <Td fontWeight="medium">{e.name}</Td>
                         <Td isNumeric>{e.quantity}</Td>
-                        <Td>{e.location || '-'}</Td>
+                        <Td>{e.location || "-"}</Td>
                         <Td>
-                          <Badge colorScheme={e.isActive ? 'green' : 'gray'}>
-                            {e.isActive ? '有効' : '無効'}
+                          <Badge colorScheme={e.isActive ? "green" : "gray"}>
+                            {e.isActive ? "有効" : "無効"}
                           </Badge>
                         </Td>
                       </Tr>
@@ -114,10 +116,10 @@ export default function EquipmentByCategory() {
                       <Tr key={e.id}>
                         <Td fontWeight="medium">{e.name}</Td>
                         <Td isNumeric>{e.quantity}</Td>
-                        <Td>{e.location || '-'}</Td>
+                        <Td>{e.location || "-"}</Td>
                         <Td>
-                          <Badge colorScheme={e.isActive ? 'green' : 'gray'}>
-                            {e.isActive ? '有効' : '無効'}
+                          <Badge colorScheme={e.isActive ? "green" : "gray"}>
+                            {e.isActive ? "有効" : "無効"}
                           </Badge>
                         </Td>
                       </Tr>

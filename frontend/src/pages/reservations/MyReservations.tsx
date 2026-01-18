@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Box,
   Heading,
@@ -30,57 +30,58 @@ import {
   useDisclosure,
   Alert,
   AlertIcon,
-  Spinner
-} from '@chakra-ui/react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getMyReservations, cancelMyReservation } from '../../api/reservation';
-import type { Reservation } from '../../types/reservation';
+  Spinner,
+} from "@chakra-ui/react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getMyReservations, cancelMyReservation } from "../../api/reservation";
+import type { Reservation } from "../../types/reservation";
 
 export default function MyReservations() {
-  const [contactInfo, setContactInfo] = useState('');
-  const [searchedContact, setSearchedContact] = useState('');
+  const [contactInfo, setContactInfo] = useState("");
+  const [searchedContact, setSearchedContact] = useState("");
   const [page, setPage] = useState(1);
-  const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
+  const [selectedReservation, setSelectedReservation] =
+    useState<Reservation | null>(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
   const queryClient = useQueryClient();
 
   // 予約履歴取得
   const { data, isLoading, error } = useQuery({
-    queryKey: ['myReservations', searchedContact, page],
-    queryFn: () => getMyReservations({ contactInfo: searchedContact, page, limit: 10 }),
-    enabled: !!searchedContact
+    queryKey: ["myReservations", searchedContact, page],
+    queryFn: () => getMyReservations({ contactInfo: searchedContact }),
+    enabled: !!searchedContact,
   });
 
   // キャンセルミューテーション
   const cancelMutation = useMutation({
-    mutationFn: (id: number) => cancelMyReservation(id, searchedContact),
+    mutationFn: (id: string) => cancelMyReservation(id, searchedContact),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['myReservations'] });
+      queryClient.invalidateQueries({ queryKey: ["myReservations"] });
       toast({
-        title: '予約をキャンセルしました',
-        status: 'success',
-        duration: 3000
+        title: "予約をキャンセルしました",
+        status: "success",
+        duration: 3000,
       });
       onClose();
     },
     onError: (error: any) => {
       toast({
-        title: 'キャンセルに失敗しました',
-        description: error.response?.data?.message || 'エラーが発生しました',
-        status: 'error',
-        duration: 5000
+        title: "キャンセルに失敗しました",
+        description: error.response?.data?.message || "エラーが発生しました",
+        status: "error",
+        duration: 5000,
       });
-    }
+    },
   });
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!contactInfo.trim()) {
       toast({
-        title: '連絡先を入力してください',
-        status: 'warning',
-        duration: 3000
+        title: "連絡先を入力してください",
+        status: "warning",
+        duration: 3000,
       });
       return;
     }
@@ -101,15 +102,15 @@ export default function MyReservations() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'pending':
+      case "pending":
         return <Badge colorScheme="yellow">承認待ち</Badge>;
-      case 'approved':
+      case "approved":
         return <Badge colorScheme="green">承認済み</Badge>;
-      case 'rejected':
+      case "rejected":
         return <Badge colorScheme="red">却下</Badge>;
-      case 'cancelled':
+      case "cancelled":
         return <Badge colorScheme="gray">キャンセル</Badge>;
-      case 'completed':
+      case "completed":
         return <Badge colorScheme="blue">完了</Badge>;
       default:
         return <Badge>{status}</Badge>;
@@ -118,17 +119,17 @@ export default function MyReservations() {
 
   const formatDateTime = (dateStr: string) => {
     const d = new Date(dateStr);
-    return d.toLocaleString('ja-JP', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    return d.toLocaleString("ja-JP", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
   const canCancel = (reservation: Reservation): boolean => {
-    if (!['pending', 'approved'].includes(reservation.status)) {
+    if (!["pending", "approved"].includes(reservation.status)) {
       return false;
     }
     const now = new Date();
@@ -203,7 +204,9 @@ export default function MyReservations() {
                         <Td>{r.id}</Td>
                         <Td>
                           <Text fontWeight="medium">
-                            {r.equipment?.name || r.customEquipmentName || '未設定'}
+                            {r.equipment?.name ||
+                              r.customEquipmentName ||
+                              "未設定"}
                           </Text>
                           {r.equipment?.category?.name && (
                             <Text fontSize="xs" color="gray.500">
@@ -213,8 +216,7 @@ export default function MyReservations() {
                         </Td>
                         <Td fontSize="xs">
                           {formatDateTime(r.startTime)}
-                          <br />
-                          〜 {formatDateTime(r.endTime)}
+                          <br />〜 {formatDateTime(r.endTime)}
                         </Td>
                         <Td>{r.quantity}</Td>
                         <Td>{getStatusBadge(r.status)}</Td>
@@ -284,10 +286,11 @@ export default function MyReservations() {
                 </Alert>
                 <Box p={4} bg="gray.50" borderRadius="md">
                   <Text fontWeight="bold">
-                    {selectedReservation.equipment?.name || selectedReservation.customEquipmentName}
+                    {selectedReservation.equipment?.name ||
+                      selectedReservation.customEquipmentName}
                   </Text>
                   <Text fontSize="sm" color="gray.600">
-                    期間: {formatDateTime(selectedReservation.startTime)} 〜{' '}
+                    期間: {formatDateTime(selectedReservation.startTime)} 〜{" "}
                     {formatDateTime(selectedReservation.endTime)}
                   </Text>
                   <Text fontSize="sm" color="gray.600">
