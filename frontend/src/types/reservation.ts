@@ -44,9 +44,9 @@ export interface ReservationInput {
   startTime: string;
   endTime: string;
   quantity?: number;
-  purpose?: string;
-  location?: string;
-  notes?: string;
+  purpose?: string | null;
+  location?: string | null;
+  notes?: string | null;
 }
 
 export interface AvailableEquipment extends Equipment {

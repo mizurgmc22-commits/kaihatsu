@@ -25,13 +25,7 @@ import EquipmentDetailModal from "../equipment/EquipmentDetailModal";
 import { resolveEquipmentImage } from "../../constants/equipmentImageOverrides";
 import PageHeader from "../../components/PageHeader";
 
-const CATEGORY_ORDER = [
-  "蘇生講習資機材",
-  "トレーニング資機材",
-  "機械類",
-  "消耗品",
-  "その他",
-];
+import { CATEGORY_SORT_ORDER } from "../../constants/category";
 
 export default function EquipmentListView() {
   const [search, setSearch] = useState("");
@@ -65,7 +59,7 @@ export default function EquipmentListView() {
   const groupedEquipment = useMemo(() => {
     const map: Record<string, Equipment[]> = {};
     (data?.items || []).forEach((item) => {
-      const key = item.category?.name || "未分類";
+      const key = item.category?.name || "ALL";
       if (!map[key]) {
         map[key] = [];
       }
@@ -77,9 +71,11 @@ export default function EquipmentListView() {
   // カテゴリ順序
   const orderedCategoryNames = useMemo(() => {
     const present = Object.keys(groupedEquipment);
-    const ordered = CATEGORY_ORDER.filter((name) => present.includes(name));
+    const ordered = CATEGORY_SORT_ORDER.filter((name) =>
+      present.includes(name),
+    );
     const rest = present
-      .filter((name) => !CATEGORY_ORDER.includes(name))
+      .filter((name) => !CATEGORY_SORT_ORDER.includes(name))
       .sort((a, b) => a.localeCompare(b, "ja"));
     return [...ordered, ...rest];
   }, [groupedEquipment]);
@@ -124,17 +120,26 @@ export default function EquipmentListView() {
         </InputGroup>
         <Select
           aria-label="カテゴリフィルタ"
-          placeholder="カテゴリで絞り込み"
+          placeholder="ALL"
           maxW="200px"
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
           bg="white"
         >
-          {categories?.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.name}
-            </option>
-          ))}
+          {categories
+            ?.sort((a, b) => {
+              const indexA = CATEGORY_SORT_ORDER.indexOf(a.name);
+              const indexB = CATEGORY_SORT_ORDER.indexOf(b.name);
+              if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+              if (indexA !== -1) return -1;
+              if (indexB !== -1) return 1;
+              return 0;
+            })
+            .map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.name}
+              </option>
+            ))}
         </Select>
         <Button type="submit" colorScheme="gray">
           検索

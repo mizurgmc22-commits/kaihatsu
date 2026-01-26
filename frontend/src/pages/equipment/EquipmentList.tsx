@@ -47,6 +47,7 @@ import EquipmentDetailModal from "./EquipmentDetailModal";
 import EquipmentCategoryModal from "./EquipmentCategoryModal";
 import EquipmentByCategory from "./EquipmentByCategory";
 import { resolveEquipmentImage } from "../../constants/equipmentImageOverrides";
+import { CATEGORY_SORT_ORDER } from "../../constants/category";
 
 export default function EquipmentList() {
   const toast = useToast();
@@ -175,7 +176,7 @@ export default function EquipmentList() {
               <Select
                 aria-label="カテゴリフィルタ"
                 title="カテゴリフィルタ"
-                placeholder="カテゴリで絞り込み"
+                placeholder="ALL"
                 maxW="200px"
                 value={categoryFilter}
                 onChange={(e) => {
@@ -183,11 +184,24 @@ export default function EquipmentList() {
                   setPage(1);
                 }}
               >
-                {categories?.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
+                {categories
+                  ?.sort((a, b) => {
+                    const indexA = CATEGORY_SORT_ORDER.indexOf(a.name);
+                    const indexB = CATEGORY_SORT_ORDER.indexOf(b.name);
+                    // Both in list: sort by index
+                    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                    // Only A in list: A comes first
+                    if (indexA !== -1) return -1;
+                    // Only B in list: B comes first
+                    if (indexB !== -1) return 1;
+                    // Neither in list: keep original order or alphabetical
+                    return 0;
+                  })
+                  .map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
               </Select>
               <Button type="submit" colorScheme="gray">
                 検索
@@ -219,86 +233,103 @@ export default function EquipmentList() {
                     </Tr>
                   </Thead>
                   <Tbody>
-                    {data?.items.map((equipment) => {
-                      const imageSrc = resolveEquipmentImage(
-                        equipment.name,
-                        equipment.imageUrl,
-                      );
-                      return (
-                        <Tr key={equipment.id}>
-                          <Td>
-                            <Box
-                              w="60px"
-                              h="45px"
-                              borderRadius="md"
-                              overflow="hidden"
-                              bg="gray.100"
-                            >
-                              {imageSrc ? (
-                                <Image
-                                  src={imageSrc}
-                                  alt={equipment.name}
-                                  w="100%"
-                                  h="100%"
-                                  objectFit="cover"
+                    {data?.items
+                      .sort((a, b) => {
+                        // Only sort if "ALL" is selected (no category filter)
+                        if (categoryFilter) return 0;
+
+                        const catNameA = a.category?.name || "";
+                        const catNameB = b.category?.name || "";
+
+                        const indexA = CATEGORY_SORT_ORDER.indexOf(catNameA);
+                        const indexB = CATEGORY_SORT_ORDER.indexOf(catNameB);
+
+                        if (indexA !== -1 && indexB !== -1)
+                          return indexA - indexB;
+                        if (indexA !== -1) return -1;
+                        if (indexB !== -1) return 1;
+                        return 0;
+                      })
+                      .map((equipment) => {
+                        const imageSrc = resolveEquipmentImage(
+                          equipment.name,
+                          equipment.imageUrl,
+                        );
+                        return (
+                          <Tr key={equipment.id}>
+                            <Td>
+                              <Box
+                                w="60px"
+                                h="45px"
+                                borderRadius="md"
+                                overflow="hidden"
+                                bg="gray.100"
+                              >
+                                {imageSrc ? (
+                                  <Image
+                                    src={imageSrc}
+                                    alt={equipment.name}
+                                    w="100%"
+                                    h="100%"
+                                    objectFit="cover"
+                                  />
+                                ) : (
+                                  <Flex
+                                    w="100%"
+                                    h="100%"
+                                    align="center"
+                                    justify="center"
+                                    color="gray.400"
+                                    fontSize="xs"
+                                  >
+                                    No Image
+                                  </Flex>
+                                )}
+                              </Box>
+                            </Td>
+                            <Td fontWeight="medium">{equipment.name}</Td>
+                            <Td>{equipment.category?.name || "-"}</Td>
+                            <Td isNumeric>{equipment.quantity}</Td>
+                            <Td>{equipment.location || "-"}</Td>
+                            <Td>
+                              <Badge
+                                colorScheme={
+                                  equipment.isActive ? "green" : "gray"
+                                }
+                              >
+                                {equipment.isActive ? "有効" : "無効"}
+                              </Badge>
+                            </Td>
+                            <Td>
+                              <HStack spacing={1}>
+                                <IconButton
+                                  aria-label="詳細"
+                                  icon={<ViewIcon />}
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleView(equipment)}
                                 />
-                              ) : (
-                                <Flex
-                                  w="100%"
-                                  h="100%"
-                                  align="center"
-                                  justify="center"
-                                  color="gray.400"
-                                  fontSize="xs"
-                                >
-                                  No Image
-                                </Flex>
-                              )}
-                            </Box>
-                          </Td>
-                          <Td fontWeight="medium">{equipment.name}</Td>
-                          <Td>{equipment.category?.name || "-"}</Td>
-                          <Td isNumeric>{equipment.quantity}</Td>
-                          <Td>{equipment.location || "-"}</Td>
-                          <Td>
-                            <Badge
-                              colorScheme={
-                                equipment.isActive ? "green" : "gray"
-                              }
-                            >
-                              {equipment.isActive ? "有効" : "無効"}
-                            </Badge>
-                          </Td>
-                          <Td>
-                            <HStack spacing={1}>
-                              <IconButton
-                                aria-label="詳細"
-                                icon={<ViewIcon />}
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleView(equipment)}
-                              />
-                              <IconButton
-                                aria-label="編集"
-                                icon={<EditIcon />}
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleEdit(equipment)}
-                              />
-                              <IconButton
-                                aria-label="削除"
-                                icon={<DeleteIcon />}
-                                size="sm"
-                                variant="ghost"
-                                colorScheme="red"
-                                onClick={() => handleDelete(equipment)}
-                                isDisabled={!equipment.isActive}
-                              />
-                            </HStack>
-                          </Td>
-                        </Tr>
-                      );
-                    })}
+                                <IconButton
+                                  aria-label="編集"
+                                  icon={<EditIcon />}
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleEdit(equipment)}
+                                />
+                                <IconButton
+                                  aria-label="削除"
+                                  icon={<DeleteIcon />}
+                                  size="sm"
+                                  variant="ghost"
+                                  colorScheme="red"
+                                  onClick={() => handleDelete(equipment)}
+                                  isDisabled={!equipment.isActive}
+                                />
+                              </HStack>
+                            </Td>
+                          </Tr>
+                        );
+                      })}
                     {data?.items.length === 0 && (
                       <Tr>
                         <Td

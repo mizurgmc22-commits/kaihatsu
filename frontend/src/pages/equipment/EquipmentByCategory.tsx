@@ -19,13 +19,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getEquipmentList } from "../../api/equipment";
 import type { Equipment } from "../../types/equipment";
 
-const CATEGORY_ORDER = [
-  "蘇生講習資機材",
-  "トレーニング資機材",
-  "機械類",
-  "消耗品",
-  "その他",
-];
+import { CATEGORY_SORT_ORDER } from "../../constants/category";
 
 export default function EquipmentByCategory() {
   const { data, isLoading, error } = useQuery({
@@ -69,7 +63,7 @@ export default function EquipmentByCategory() {
               </Tr>
             </Thead>
             <Tbody>
-              {CATEGORY_ORDER.map((catName) => {
+              {CATEGORY_SORT_ORDER.map((catName) => {
                 const items = grouped[catName] || [];
                 if (items.length === 0) return null;
 
@@ -101,7 +95,7 @@ export default function EquipmentByCategory() {
 
               {/* ORDER にないカテゴリ（将来追加されたもの） */}
               {Object.entries(grouped)
-                .filter(([name]) => !CATEGORY_ORDER.includes(name))
+                .filter(([name]) => !CATEGORY_SORT_ORDER.includes(name))
                 .map(([name, items]) => (
                   <>
                     <Tr key={`header-${name}`} bg="gray.50">

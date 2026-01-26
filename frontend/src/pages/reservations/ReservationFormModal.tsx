@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect } from "react";
 import {
   Modal,
   ModalOverlay,
@@ -26,14 +26,14 @@ import {
   useToast,
   Alert,
   AlertIcon,
-  Image
-} from '@chakra-ui/react';
-import { useForm, Controller } from 'react-hook-form';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createReservation } from '../../api/reservation';
-import type { AvailableEquipment } from '../../types/reservation';
-import type { ReservationInput } from '../../types/reservation';
-import { resolveEquipmentImage } from '../../constants/equipmentImageOverrides';
+  Image,
+} from "@chakra-ui/react";
+import { useForm, Controller } from "react-hook-form";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { createReservation } from "../../api/reservation";
+import type { AvailableEquipment } from "../../types/reservation";
+import type { ReservationInput } from "../../types/reservation";
+import { resolveEquipmentImage } from "../../constants/equipmentImageOverrides";
 
 interface Props {
   isOpen: boolean;
@@ -65,11 +65,13 @@ export default function ReservationFormModal({
   equipment,
   selectedDate,
   onComplete,
-  customEquipmentName
+  customEquipmentName,
 }: Props) {
   const toast = useToast();
   const queryClient = useQueryClient();
-  const resolvedImageSrc = equipment ? resolveEquipmentImage(equipment.name, equipment.imageUrl) : undefined;
+  const resolvedImageSrc = equipment
+    ? resolveEquipmentImage(equipment.name, equipment.imageUrl)
+    : undefined;
 
   const {
     register,
@@ -77,43 +79,43 @@ export default function ReservationFormModal({
     control,
     reset,
     watch,
-    formState: { errors }
+    formState: { errors },
   } = useForm<FormData>({
     defaultValues: {
-      department: '',
-      applicantName: '',
-      contactInfo: '',
-      startDate: '',
-      startTime: '09:00',
-      endDate: '',
-      endTime: '18:00',
+      department: "",
+      applicantName: "",
+      contactInfo: "",
+      startDate: "",
+      startTime: "09:00",
+      endDate: "",
+      endTime: "18:00",
       quantity: 1,
-      purpose: '',
-      location: '',
-      notes: '',
-      customEquipmentName: ''
-    }
+      purpose: "",
+      location: "",
+      notes: "",
+      customEquipmentName: "",
+    },
   });
 
-  const watchQuantity = watch('quantity');
-  const watchCustomEquipmentName = watch('customEquipmentName');
+  const watchQuantity = watch("quantity");
+  const watchCustomEquipmentName = watch("customEquipmentName");
 
   // フォームリセット
   useEffect(() => {
     if (isOpen && selectedDate) {
       reset({
-        department: '',
-        applicantName: '',
-        contactInfo: '',
+        department: "",
+        applicantName: "",
+        contactInfo: "",
         startDate: selectedDate,
-        startTime: '09:00',
+        startTime: "09:00",
         endDate: selectedDate,
-        endTime: '18:00',
+        endTime: "18:00",
         quantity: 1,
-        purpose: '',
-        location: '',
-        notes: '',
-        customEquipmentName: customEquipmentName || ''
+        purpose: "",
+        location: "",
+        notes: "",
+        customEquipmentName: customEquipmentName || "",
       });
     }
   }, [isOpen, selectedDate, customEquipmentName, reset]);
@@ -122,32 +124,36 @@ export default function ReservationFormModal({
   const createMutation = useMutation({
     mutationFn: createReservation,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reservations'] });
-      queryClient.invalidateQueries({ queryKey: ['availableEquipment'] });
+      queryClient.invalidateQueries({ queryKey: ["reservations"] });
+      queryClient.invalidateQueries({ queryKey: ["availableEquipment"] });
       toast({
-        title: '予約を登録しました',
-        description: '予約が正常に作成されました。',
-        status: 'success',
-        duration: 3000
+        title: "予約を登録しました",
+        description: "予約が正常に作成されました。",
+        status: "success",
+        duration: 3000,
       });
       onComplete();
     },
     onError: (error: any) => {
+      console.error("Reservation Error:", error);
       toast({
-        title: '予約に失敗しました',
-        description: error.response?.data?.message || 'エラーが発生しました',
-        status: 'error',
-        duration: 5000
+        title: "予約に失敗しました",
+        description:
+          error.response?.data?.message ||
+          error.message ||
+          "エラーが発生しました",
+        status: "error",
+        duration: 5000,
       });
-    }
+    },
   });
 
   const onSubmit = (data: FormData) => {
     if (!equipment && !data.customEquipmentName.trim()) {
       toast({
-        title: '機器名を入力してください',
-        status: 'error',
-        duration: 3000
+        title: "機器名を入力してください",
+        status: "error",
+        duration: 3000,
       });
       return;
     }
@@ -159,9 +165,9 @@ export default function ReservationFormModal({
       startTime: `${data.startDate}T${data.startTime}:00`,
       endTime: `${data.endDate}T${data.endTime}:00`,
       quantity: data.quantity,
-      purpose: data.purpose || undefined,
-      location: data.location || undefined,
-      notes: data.notes || undefined
+      purpose: data.purpose || null,
+      location: data.location || null,
+      notes: data.notes || null,
     };
 
     if (equipment) {
@@ -174,17 +180,18 @@ export default function ReservationFormModal({
   };
 
   const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '';
+    if (!dateStr) return "";
     const d = new Date(dateStr);
-    return d.toLocaleDateString('ja-JP', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+    return d.toLocaleDateString("ja-JP", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     });
   };
 
   const isQuantityExceeded = equipment
-    ? !equipment.isUnlimited && watchQuantity > equipment.remainingQuantity
+    ? !equipment.isUnlimited &&
+      Number(watchQuantity) > Number(equipment.remainingQuantity)
     : false;
 
   return (
@@ -218,11 +225,16 @@ export default function ReservationFormModal({
                             {equipment.name}
                           </Text>
                           <Text fontSize="sm" color="gray.600">
-                            {equipment.category?.name || '未分類'}
+                            {equipment.category?.name || "ALL"}
                           </Text>
                         </Box>
                         {!equipment.isUnlimited && (
-                          <Badge colorScheme="green" fontSize="md" px={3} py={1}>
+                          <Badge
+                            colorScheme="green"
+                            fontSize="md"
+                            px={3}
+                            py={1}
+                          >
                             残り {equipment.remainingQuantity}
                           </Badge>
                         )}
@@ -241,7 +253,9 @@ export default function ReservationFormModal({
                     <FormLabel>予約機器名</FormLabel>
                     <Input
                       placeholder="予約したい機器名を入力"
-                      {...register('customEquipmentName', { required: '機器名は必須です' })}
+                      {...register("customEquipmentName", {
+                        required: "機器名は必須です",
+                      })}
                     />
                   </FormControl>
                 </Box>
@@ -251,7 +265,7 @@ export default function ReservationFormModal({
               <FormControl isRequired>
                 <FormLabel>部署</FormLabel>
                 <Input
-                  {...register('department', { required: '部署は必須です' })}
+                  {...register("department", { required: "部署は必須です" })}
                   placeholder="例: 看護部"
                 />
               </FormControl>
@@ -260,14 +274,18 @@ export default function ReservationFormModal({
                 <FormControl isRequired>
                   <FormLabel>氏名</FormLabel>
                   <Input
-                    {...register('applicantName', { required: '氏名は必須です' })}
+                    {...register("applicantName", {
+                      required: "氏名は必須です",
+                    })}
                     placeholder="例: 山田 太郎"
                   />
                 </FormControl>
                 <FormControl isRequired>
                   <FormLabel>連絡先（内線/PHS）</FormLabel>
                   <Input
-                    {...register('contactInfo', { required: '連絡先は必須です' })}
+                    {...register("contactInfo", {
+                      required: "連絡先は必須です",
+                    })}
                     placeholder="例: 内線1234 / PHS 5678"
                   />
                 </FormControl>
@@ -279,14 +297,14 @@ export default function ReservationFormModal({
                   <FormLabel>利用開始日</FormLabel>
                   <Input
                     type="date"
-                    {...register('startDate', { required: '開始日は必須です' })}
+                    {...register("startDate", { required: "開始日は必須です" })}
                   />
                 </FormControl>
                 <FormControl isRequired flex={1}>
                   <FormLabel>開始時間</FormLabel>
-                  <Select {...register('startTime', { required: true })}>
+                  <Select {...register("startTime", { required: true })}>
                     {Array.from({ length: 24 }, (_, i) => {
-                      const hour = String(i).padStart(2, '0');
+                      const hour = String(i).padStart(2, "0");
                       return (
                         <option key={hour} value={`${hour}:00`}>
                           {hour}:00
@@ -302,14 +320,14 @@ export default function ReservationFormModal({
                   <FormLabel>利用終了日</FormLabel>
                   <Input
                     type="date"
-                    {...register('endDate', { required: '終了日は必須です' })}
+                    {...register("endDate", { required: "終了日は必須です" })}
                   />
                 </FormControl>
                 <FormControl isRequired flex={1}>
                   <FormLabel>終了時間</FormLabel>
-                  <Select {...register('endTime', { required: true })}>
+                  <Select {...register("endTime", { required: true })}>
                     {Array.from({ length: 24 }, (_, i) => {
-                      const hour = String(i).padStart(2, '0');
+                      const hour = String(i).padStart(2, "0");
                       return (
                         <option key={hour} value={`${hour}:00`}>
                           {hour}:00
@@ -329,12 +347,18 @@ export default function ReservationFormModal({
                   rules={{
                     required: true,
                     min: 1,
-                    max: equipment?.isUnlimited ? undefined : equipment?.remainingQuantity
+                    max: equipment?.isUnlimited
+                      ? undefined
+                      : equipment?.remainingQuantity,
                   }}
                   render={({ field }) => (
                     <NumberInput
                       min={1}
-                      max={equipment?.isUnlimited ? undefined : equipment?.remainingQuantity}
+                      max={
+                        equipment?.isUnlimited
+                          ? undefined
+                          : equipment?.remainingQuantity
+                      }
                       value={field.value}
                       onChange={(_, val) => field.onChange(val || 1)}
                     >
@@ -349,7 +373,8 @@ export default function ReservationFormModal({
                 {isQuantityExceeded && equipment && (
                   <Alert status="error" mt={2} size="sm">
                     <AlertIcon />
-                    予約可能数を超えています（最大: {equipment.remainingQuantity}）
+                    予約可能数を超えています（最大:{" "}
+                    {equipment.remainingQuantity}）
                   </Alert>
                 )}
               </FormControl>
@@ -358,7 +383,7 @@ export default function ReservationFormModal({
               <FormControl>
                 <FormLabel>利用目的</FormLabel>
                 <Textarea
-                  {...register('purpose')}
+                  {...register("purpose")}
                   placeholder="例: 新人研修でのCPR訓練"
                   rows={2}
                 />
@@ -368,7 +393,7 @@ export default function ReservationFormModal({
               <FormControl>
                 <FormLabel>利用場所</FormLabel>
                 <Input
-                  {...register('location')}
+                  {...register("location")}
                   placeholder="例: 3階 研修室A"
                 />
               </FormControl>
@@ -377,7 +402,7 @@ export default function ReservationFormModal({
               <FormControl>
                 <FormLabel>備考</FormLabel>
                 <Textarea
-                  {...register('notes')}
+                  {...register("notes")}
                   placeholder="その他連絡事項があれば記入してください"
                   rows={2}
                 />

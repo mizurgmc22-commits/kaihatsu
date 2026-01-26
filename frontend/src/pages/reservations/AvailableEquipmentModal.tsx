@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 import {
   Modal,
   ModalOverlay,
@@ -19,11 +19,12 @@ import {
   Input,
   FormControl,
   FormLabel,
-  Image
-} from '@chakra-ui/react';
-import type { AvailableEquipment } from '../../types/reservation';
-import type { EquipmentCategory } from '../../types/equipment';
-import { resolveEquipmentImage } from '../../constants/equipmentImageOverrides';
+  Image,
+} from "@chakra-ui/react";
+import type { AvailableEquipment } from "../../types/reservation";
+import type { EquipmentCategory } from "../../types/equipment";
+import { resolveEquipmentImage } from "../../constants/equipmentImageOverrides";
+import { CATEGORY_SORT_ORDER } from "../../constants/category";
 
 interface Props {
   isOpen: boolean;
@@ -48,17 +49,17 @@ export default function AvailableEquipmentModal({
   categoryFilter,
   onCategoryChange,
   categories,
-  onCustomReserve
+  onCustomReserve,
 }: Props) {
-  const [customName, setCustomName] = useState('');
+  const [customName, setCustomName] = useState("");
   const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '';
+    if (!dateStr) return "";
     const d = new Date(dateStr);
-    return d.toLocaleDateString('ja-JP', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      weekday: 'short'
+    return d.toLocaleDateString("ja-JP", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      weekday: "short",
     });
   };
 
@@ -73,15 +74,17 @@ export default function AvailableEquipmentModal({
     if (item.remainingQuantity <= 2) {
       return <Badge colorScheme="yellow">残り{item.remainingQuantity}</Badge>;
     }
-    return <Badge colorScheme="green">予約可能（残り{item.remainingQuantity}）</Badge>;
+    return (
+      <Badge colorScheme="green">
+        予約可能（残り{item.remainingQuantity}）
+      </Badge>
+    );
   };
-
-  const CATEGORY_ORDER = ['蘇生講習資機材', 'トレーニング資機材', '機械類', '消耗品', 'その他'];
 
   const groupedEquipment = useMemo(() => {
     const map: Record<string, AvailableEquipment[]> = {};
     equipment.forEach((item) => {
-      const key = item.category?.name || '未分類';
+      const key = item.category?.name || "ALL";
       if (!map[key]) {
         map[key] = [];
       }
@@ -92,8 +95,12 @@ export default function AvailableEquipmentModal({
 
   const orderedCategoryNames = useMemo(() => {
     const present = Object.keys(groupedEquipment);
-    const ordered = CATEGORY_ORDER.filter((name) => present.includes(name));
-    const rest = present.filter((name) => !CATEGORY_ORDER.includes(name)).sort((a, b) => a.localeCompare(b, 'ja'));
+    const ordered = CATEGORY_SORT_ORDER.filter((name) =>
+      present.includes(name),
+    );
+    const rest = present
+      .filter((name) => !CATEGORY_SORT_ORDER.includes(name))
+      .sort((a, b) => a.localeCompare(b, "ja"));
     return [...ordered, ...rest];
   }, [groupedEquipment]);
 
@@ -101,7 +108,7 @@ export default function AvailableEquipmentModal({
     const trimmed = customName.trim();
     if (!trimmed) return;
     onCustomReserve(trimmed);
-    setCustomName('');
+    setCustomName("");
   };
 
   return (
@@ -118,16 +125,25 @@ export default function AvailableEquipmentModal({
             <Select
               aria-label="カテゴリフィルタ"
               title="カテゴリフィルタ"
-              placeholder="すべてのカテゴリ"
+              placeholder="ALL"
               value={categoryFilter}
               onChange={(e) => onCategoryChange(e.target.value)}
               size="sm"
             >
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
+              {categories
+                .sort((a, b) => {
+                  const indexA = CATEGORY_SORT_ORDER.indexOf(a.name);
+                  const indexB = CATEGORY_SORT_ORDER.indexOf(b.name);
+                  if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                  if (indexA !== -1) return -1;
+                  if (indexB !== -1) return 1;
+                  return 0;
+                })
+                .map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
             </Select>
           </Box>
 
@@ -147,20 +163,29 @@ export default function AvailableEquipmentModal({
                 <Box key={categoryName}>
                   <HStack justify="space-between" mb={2}>
                     <Text fontWeight="bold">{categoryName}</Text>
-                    <Badge colorScheme="blue">{groupedEquipment[categoryName]?.length ?? 0} 件</Badge>
+                    <Badge colorScheme="blue">
+                      {groupedEquipment[categoryName]?.length ?? 0} 件
+                    </Badge>
                   </HStack>
                   <VStack spacing={3} align="stretch">
                     {groupedEquipment[categoryName]?.map((item) => {
-                      const imageSrc = resolveEquipmentImage(item.name, item.imageUrl);
+                      const imageSrc = resolveEquipmentImage(
+                        item.name,
+                        item.imageUrl,
+                      );
                       return (
                         <Box
                           key={item.id}
                           p={4}
                           borderWidth="1px"
                           borderRadius="md"
-                          bg={item.isAvailable ? 'white' : 'gray.50'}
+                          bg={item.isAvailable ? "white" : "gray.50"}
                           opacity={item.isAvailable ? 1 : 0.7}
-                          _hover={item.isAvailable ? { borderColor: 'blue.300', shadow: 'sm' } : {}}
+                          _hover={
+                            item.isAvailable
+                              ? { borderColor: "blue.300", shadow: "sm" }
+                              : {}
+                          }
                           transition="all 0.2s"
                         >
                           <Flex justify="space-between" align="start" gap={4}>
@@ -186,7 +211,8 @@ export default function AvailableEquipmentModal({
                               )}
                               {!item.isUnlimited && (
                                 <Text fontSize="sm" color="gray.500">
-                                  保有数: {item.quantity} / 残り: {item.remainingQuantity}
+                                  保有数: {item.quantity} / 残り:{" "}
+                                  {item.remainingQuantity}
                                 </Text>
                               )}
                             </Box>
@@ -208,7 +234,9 @@ export default function AvailableEquipmentModal({
 
               <Box borderWidth="1px" borderRadius="md" p={4} bg="gray.50">
                 <FormControl>
-                  <FormLabel fontWeight="bold">その他の機器を予約する</FormLabel>
+                  <FormLabel fontWeight="bold">
+                    その他の機器を予約する
+                  </FormLabel>
                   <Text fontSize="sm" color="gray.600" mb={2}>
                     予約したい機器名を直接入力してください。
                   </Text>
@@ -218,7 +246,11 @@ export default function AvailableEquipmentModal({
                       value={customName}
                       onChange={(e) => setCustomName(e.target.value)}
                     />
-                    <Button colorScheme="blue" onClick={handleCustomReserve} isDisabled={!customName.trim()}>
+                    <Button
+                      colorScheme="blue"
+                      onClick={handleCustomReserve}
+                      isDisabled={!customName.trim()}
+                    >
                       予約する
                     </Button>
                   </HStack>
