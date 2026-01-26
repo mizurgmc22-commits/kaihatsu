@@ -46,7 +46,7 @@ export interface EquipmentInput {
   categoryId?: string | null;
   specifications?: Record<string, unknown>;
   isActive?: boolean;
-  imageFile?: FileList;
+  imageUrl?: string; // Google Drive URL or file ID
   removeImage?: boolean;
 }
 

@@ -4,7 +4,7 @@
 
 - **目的**: 救急・トレーニング機材や消耗品の貸出申請を Web 化し、利用者の予約と管理者のモニタリングを一元化する。
 - **対象範囲**: 添付申請書に記載された資機材全般（蘇生講習資機材、トレーニング資機材、機械類、消耗品 など）。
-- **開発・検証環境**: フロントエンドは React + Vite、バックエンドは Express + TypeORM（開発時は SQLite、本番は PostgreSQL / MySQL を想定）。`npm run dev` で API と UI を同時起動し、<http://localhost:5173> 経由で UI を確認する。
+- **開発・検証環境**: フロントエンドは React + Vite + Chakra UI、バックエンドは Firebase (Firestore, Authentication)。`npm run dev` で開発サーバーを起動し、<http://localhost:5174> 経由で UI を確認する。
 
 ## 2. ステークホルダーとロール
 
@@ -32,7 +32,7 @@
 ### 4.2 資機材管理
 
 - 名称、カテゴリ、保有数、保管場所、備考、利用制限（メンテナンス期間、部署限定フラグ等）を持つマスタを登録・更新。
-- TypeORM シード／マイグレーションによりマスタをコード管理し、環境間で差異なく再現。
+- 資機材画像は Google Drive 共有リンクとして保存し、表示時にサムネイルURLに変換。詳細は [要件定義4](./requirements-4.md) を参照。
 - 非アクティブ資機材の貸出抑止や論理削除（`isActive` / `isDeleted`）をサポート。
 
 ### 4.3 予約機能（利用者）
@@ -165,10 +165,10 @@
 
 ## 8. システム構成要件（案）
 
-- Webアプリ構成（フロント：SPAまたはサーバサイドレンダリング、バックエンド：Firebase を用いた REST API / サーバーレス構成）。
+- Webアプリ構成（フロント：React SPA、バックエンド：Firebase を用いたサーバーレス構成）。
 - 認証・認可: Firebase Authentication を利用し、ユーザのログイン・ロール管理と連携。
-- データベース：Firebase Firestore などのマネージド NoSQL データベースを基本とし、必要に応じて別途リレーショナルDB（例：PostgreSQL/MySQL）を検討。
-- 業務ロジック: Firebase Cloud Functions 等を利用したサーバーレス処理（予約競合チェック、通知処理、バッチ処理など）。
+- データベース：Firebase Firestore（マネージド NoSQL）。
+- 画像ストレージ: Google Drive 共有リンク方式（Firebase Storage は課金を避けるため不使用）。詳細は [要件定義4](./requirements-4.md) を参照。
 - ガントチャート表示ライブラリ（例：DHTMLX Gantt、FullCalendar＋カスタム）。
 
 ## 9. 移行・運用計画

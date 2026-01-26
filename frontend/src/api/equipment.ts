@@ -1,4 +1,4 @@
-import { db, storage } from "../lib/firebase";
+import { db } from "../lib/firebase";
 import {
   collection,
   getDocs,
@@ -12,12 +12,6 @@ import {
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
-import {
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-} from "firebase/storage";
 import type {
   Equipment,
   EquipmentListResponse,
@@ -32,6 +26,46 @@ export interface EquipmentQueryParams {
   categoryId?: string;
   isActive?: boolean;
 }
+
+// Google Drive URLをプレビュー用に変換するヘルパー（プレビュー専用）
+export const convertGoogleDriveUrl = (url: string): string => {
+  if (!url) return "";
+
+  // すでに thumbnail 形式の場合はそのまま返す
+  if (url.includes("thumbnail?id=")) {
+    return url;
+  }
+
+  // ファイルIDを抽出
+  let fileId: string | null = null;
+
+  // /d/FILE_ID/ 形式
+  const dMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (dMatch) {
+    fileId = dMatch[1];
+  }
+
+  // id=FILE_ID 形式
+  if (!fileId) {
+    const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (idMatch) {
+      fileId = idMatch[1];
+    }
+  }
+
+  // ファイルIDのみの場合
+  if (!fileId && url.match(/^[a-zA-Z0-9_-]{20,}$/)) {
+    fileId = url;
+  }
+
+  // ファイルIDが見つかった場合、サムネイルURLを返す
+  if (fileId) {
+    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
+  }
+
+  // その他はそのまま返す
+  return url;
+};
 
 // ヘルパー: FirestoreドキュメントをEquipment型に変換
 const mapDocToEquipment = (doc: any): Equipment => {
@@ -95,7 +129,7 @@ export const getEquipment = async (id: string): Promise<Equipment> => {
   return mapDocToEquipment(docSnap);
 };
 
-// 資機材作成
+// 資機材作成（Google Drive URL対応）
 export const createEquipment = async (
   formData: FormData,
 ): Promise<Equipment> => {
@@ -105,17 +139,8 @@ export const createEquipment = async (
   const location = formData.get("location") as string;
   const categoryId = formData.get("categoryId") as string;
   const isActive = formData.get("isActive") === "true";
-  const imageFile = formData.get("image") as File;
-
-  let imageUrl = "";
-  if (imageFile && imageFile.size > 0) {
-    const storageRef = ref(
-      storage,
-      `equipments/${Date.now()}_${imageFile.name}`,
-    );
-    await uploadBytes(storageRef, imageFile);
-    imageUrl = await getDownloadURL(storageRef);
-  }
+  // 画像URLはそのまま保存（変換は表示時に行う）
+  const imageUrl = (formData.get("imageUrl") as string) || "";
 
   const equipmentData = {
     name,
@@ -139,7 +164,7 @@ export const createEquipment = async (
   } as any;
 };
 
-// 資機材更新
+// 資機材更新（Google Drive URL対応）
 export const updateEquipment = async (
   id: string,
   formData: FormData,
@@ -164,25 +189,15 @@ export const updateEquipment = async (
   if (formData.has("isActive"))
     updates.isActive = formData.get("isActive") === "true";
 
-  const imageFile = formData.get("image") as File;
+  // 画像URL処理（Google Drive URL対応）
+  const imageUrlInput = formData.get("imageUrl") as string;
   const removeImage = formData.get("removeImage") === "true";
 
-  if (removeImage && currentData.imageUrl) {
-    // 古い画像を削除（オプション）
-    try {
-      const oldRef = ref(storage, currentData.imageUrl);
-      await deleteObject(oldRef);
-    } catch (e) {
-      console.error("Error deleting old image", e);
-    }
+  if (removeImage) {
     updates.imageUrl = "";
-  } else if (imageFile && imageFile.size > 0) {
-    const storageRef = ref(
-      storage,
-      `equipments/${Date.now()}_${imageFile.name}`,
-    );
-    await uploadBytes(storageRef, imageFile);
-    updates.imageUrl = await getDownloadURL(storageRef);
+  } else if (imageUrlInput !== null && imageUrlInput !== undefined) {
+    // URLはそのまま保存（変換は表示時に行う）
+    updates.imageUrl = imageUrlInput;
   }
 
   await updateDoc(equipmentRef, updates);

@@ -25,6 +25,7 @@ import {
   Image,
   Checkbox,
   Text,
+  Box,
 } from "@chakra-ui/react";
 import { useForm, Controller } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -32,6 +33,7 @@ import {
   createEquipment,
   updateEquipment,
   getCategories,
+  convertGoogleDriveUrl,
 } from "../../api/equipment";
 import type { Equipment, EquipmentInput } from "../../types/equipment";
 
@@ -58,7 +60,6 @@ export default function EquipmentFormModal({
     control,
     reset,
     watch,
-    setValue,
     formState: { errors, isSubmitting },
   } = useForm<EquipmentInput>({
     defaultValues: {
@@ -68,12 +69,12 @@ export default function EquipmentFormModal({
       location: "",
       categoryId: undefined,
       isActive: true,
-      imageFile: undefined,
+      imageUrl: "",
       removeImage: false,
     },
   });
 
-  const watchImageFile = watch("imageFile");
+  const watchImageUrl = watch("imageUrl");
 
   // カテゴリ一覧取得
   const { data: categories } = useQuery({
@@ -92,9 +93,10 @@ export default function EquipmentFormModal({
           location: equipment.location || "",
           categoryId: equipment.category?.id,
           isActive: equipment.isActive,
-          imageFile: undefined,
+          imageUrl: equipment.imageUrl || "",
           removeImage: false,
         });
+        setPreviewUrl(equipment.imageUrl || null);
       } else {
         reset({
           name: "",
@@ -103,26 +105,23 @@ export default function EquipmentFormModal({
           location: "",
           categoryId: undefined,
           isActive: true,
-          imageFile: undefined,
+          imageUrl: "",
           removeImage: false,
         });
+        setPreviewUrl(null);
       }
-      setPreviewUrl(null);
     }
   }, [isOpen, isEditMode, equipment, reset]);
 
+  // 画像URLプレビュー更新
   useEffect(() => {
-    if (watchImageFile && watchImageFile.length > 0) {
-      const file = watchImageFile[0];
-      const objectUrl = URL.createObjectURL(file);
-      setPreviewUrl(objectUrl);
-      setValue("removeImage", false);
-      return () => {
-        URL.revokeObjectURL(objectUrl);
-      };
+    if (watchImageUrl) {
+      const converted = convertGoogleDriveUrl(watchImageUrl);
+      setPreviewUrl(converted);
+    } else if (!isEditMode || !equipment?.imageUrl) {
+      setPreviewUrl(null);
     }
-    setPreviewUrl(null);
-  }, [watchImageFile, setValue]);
+  }, [watchImageUrl, isEditMode, equipment]);
 
   const buildFormData = (data: EquipmentInput) => {
     const formData = new FormData();
@@ -146,8 +145,9 @@ export default function EquipmentFormModal({
     if (data.specifications) {
       formData.append("specifications", JSON.stringify(data.specifications));
     }
-    if (data.imageFile && data.imageFile.length > 0) {
-      formData.append("image", data.imageFile[0]);
+    // Google Drive画像URL
+    if (data.imageUrl !== undefined) {
+      formData.append("imageUrl", data.imageUrl || "");
     }
     if (data.removeImage) {
       formData.append("removeImage", "true");
@@ -210,7 +210,7 @@ export default function EquipmentFormModal({
     <Modal isOpen={isOpen} onClose={onClose} size="lg">
       <ModalOverlay />
       <ModalContent>
-        <form onSubmit={handleSubmit(onSubmit)} encType="multipart/form-data">
+        <form onSubmit={handleSubmit(onSubmit)}>
           <ModalHeader>{isEditMode ? "資機材編集" : "資機材登録"}</ModalHeader>
           <ModalCloseButton />
 
@@ -278,35 +278,44 @@ export default function EquipmentFormModal({
               </FormControl>
 
               <FormControl>
-                <FormLabel>画像</FormLabel>
-                <Input
-                  type="file"
-                  accept="image/*"
-                  {...register("imageFile")}
+                <FormLabel>画像URL（Google Drive）</FormLabel>
+                <Textarea
+                  {...register("imageUrl")}
+                  placeholder="Google Drive共有URLまたはファイルID"
+                  rows={2}
+                  fontSize="sm"
+                  fontFamily="monospace"
+                  resize="vertical"
                 />
                 <FormHelperText>
-                  5MB以下の画像ファイルをアップロードできます
+                  Google
+                  Driveで「リンクを知っている全員が閲覧可」に設定した画像のURLを入力
                 </FormHelperText>
-                {(previewUrl || equipment?.imageUrl) && (
+                {previewUrl && (
                   <VStack align="flex-start" spacing={2} mt={3} w="100%">
-                    <Image
-                      src={previewUrl || equipment?.imageUrl || ""}
-                      alt="資機材画像プレビュー"
-                      maxH="200px"
+                    <Box
                       borderRadius="md"
-                      objectFit="cover"
-                    />
-                    {previewUrl ? (
-                      <Text fontSize="sm" color="gray.500">
-                        新しい画像を選択すると保存時に既存画像が置き換わります
-                      </Text>
-                    ) : (
-                      isEditMode &&
-                      equipment?.imageUrl && (
-                        <Checkbox {...register("removeImage")}>
-                          既存画像を削除する
-                        </Checkbox>
-                      )
+                      overflow="hidden"
+                      border="1px solid"
+                      borderColor="gray.200"
+                    >
+                      <Image
+                        src={previewUrl}
+                        alt="資機材画像プレビュー"
+                        maxH="200px"
+                        objectFit="cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    </Box>
+                    <Text fontSize="xs" color="gray.500">
+                      プレビュー（共有設定が正しくない場合は表示されません）
+                    </Text>
+                    {isEditMode && equipment?.imageUrl && (
+                      <Checkbox {...register("removeImage")}>
+                        画像URLを削除する
+                      </Checkbox>
                     )}
                   </VStack>
                 )}
