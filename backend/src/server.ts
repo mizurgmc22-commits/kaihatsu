@@ -1,51 +1,64 @@
-import express from 'express';
-import cors from 'cors';
-import 'dotenv/config';
-import bcrypt from 'bcryptjs';
-import AppDataSource from './data-source';
-import { User } from './entity/User';
-import authRouter from './routes/auth';
-import dashboardRouter from './routes/dashboard';
-import equipmentRouter from './routes/equipment';
-import reservationRouter from './routes/reservation';
-import { UPLOADS_ROOT } from './config/upload';
+import express from "express";
+import cors from "cors";
+import "dotenv/config";
+import bcrypt from "bcryptjs";
+import AppDataSource from "./data-source";
+import { User } from "./entity/User";
+import authRouter from "./routes/auth";
+import dashboardRouter from "./routes/dashboard";
+import topPageContentRouter from "./routes/topPageContent";
+import equipmentRouter from "./routes/equipment";
+import reservationRouter from "./routes/reservation";
+import { UPLOADS_ROOT } from "./config/upload";
 
 const app = express();
 const PORT = process.env.PORT || 3002;
-const DEFAULT_ADMIN_EMAIL = (process.env.DEFAULT_ADMIN_EMAIL || 'admin@sazan-with.local').toLowerCase();
-const DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD || 'Sazan-Admin@2025';
-const DEFAULT_ADMIN_NAME = process.env.DEFAULT_ADMIN_NAME || '管理者';
-const DEFAULT_ADMIN_DEPARTMENT = process.env.DEFAULT_ADMIN_DEPARTMENT || 'システム管理';
+const DEFAULT_ADMIN_EMAIL = (
+  process.env.DEFAULT_ADMIN_EMAIL || "admin@sazan-with.local"
+).toLowerCase();
+const DEFAULT_ADMIN_PASSWORD =
+  process.env.DEFAULT_ADMIN_PASSWORD || "Sazan-Admin@2025";
+const DEFAULT_ADMIN_NAME = process.env.DEFAULT_ADMIN_NAME || "管理者";
+const DEFAULT_ADMIN_DEPARTMENT =
+  process.env.DEFAULT_ADMIN_DEPARTMENT || "システム管理";
 
 app.use(cors());
-app.use(express.json());
-app.use('/api/uploads', express.static(UPLOADS_ROOT));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use("/api/uploads", express.static(UPLOADS_ROOT));
 
 app.use((req, _res, next) => {
-  console.log('REQUEST', req.method, req.url);
+  console.log("REQUEST", req.method, req.url);
   next();
 });
 
-app.get('/', (_req, res) => {
-  res.json({ message: '資機材予約システムAPI' });
+app.get("/", (_req, res) => {
+  res.json({ message: "資機材予約システムAPI" });
 });
 
-app.get('/api/debug-routes', (_req, res) => {
+app.get("/api/debug-routes", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.use('/api/auth', authRouter);
-app.use('/api/dashboard', dashboardRouter);
-app.use('/api/equipment', equipmentRouter);
-app.use('/api/reservations', reservationRouter);
+app.use("/api/auth", authRouter);
+app.use("/api/dashboard", dashboardRouter);
+app.use("/api/top-page-content", topPageContentRouter);
+app.use("/api/equipment", equipmentRouter);
+app.use("/api/reservations", reservationRouter);
+
+// 404 Debug Handler
+app.use((req, res, next) => {
+  console.log("404 Hit:", req.method, req.url);
+  res.status(404).json({ message: "Route not found", path: req.url });
+});
 
 async function ensureDefaultAdmin() {
   const userRepo = AppDataSource.getRepository(User);
 
   let admin = await userRepo
-    .createQueryBuilder('user')
-    .addSelect('user.password')
-    .where('user.email = :email', { email: DEFAULT_ADMIN_EMAIL })
+    .createQueryBuilder("user")
+    .addSelect("user.password")
+    .where("user.email = :email", { email: DEFAULT_ADMIN_EMAIL })
     .getOne();
 
   if (!admin) {
@@ -55,8 +68,8 @@ async function ensureDefaultAdmin() {
       email: DEFAULT_ADMIN_EMAIL,
       password: hashedPassword,
       department: DEFAULT_ADMIN_DEPARTMENT,
-      role: 'admin',
-      isActive: true
+      role: "admin",
+      isActive: true,
     });
     await userRepo.save(admin);
     console.log(`Default admin created (${DEFAULT_ADMIN_EMAIL})`);
@@ -70,12 +83,15 @@ async function ensureDefaultAdmin() {
     requiresUpdate = true;
   }
 
-  if (admin.role !== 'admin' && admin.role !== 'system_admin') {
-    admin.role = 'admin';
+  if (admin.role !== "admin" && admin.role !== "system_admin") {
+    admin.role = "admin";
     requiresUpdate = true;
   }
 
-  const passwordMatches = await bcrypt.compare(DEFAULT_ADMIN_PASSWORD, admin.password);
+  const passwordMatches = await bcrypt.compare(
+    DEFAULT_ADMIN_PASSWORD,
+    admin.password,
+  );
   if (!passwordMatches) {
     admin.password = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
     requiresUpdate = true;
@@ -102,14 +118,15 @@ async function ensureDefaultAdmin() {
 async function startServer() {
   try {
     await AppDataSource.initialize();
-    console.log('Database connected');
+    console.log("Database connected");
     await ensureDefaultAdmin();
 
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
+      console.log("Server started at", new Date().toISOString());
     });
   } catch (error) {
-    console.error('Database connection error:', error);
+    console.error("Database connection error:", error);
     process.exit(1);
   }
 }

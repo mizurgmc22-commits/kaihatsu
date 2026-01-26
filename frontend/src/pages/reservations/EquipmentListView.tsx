@@ -17,11 +17,13 @@ import {
   useDisclosure,
 } from "@chakra-ui/react";
 import { SearchIcon } from "@chakra-ui/icons";
+import { FiPackage } from "react-icons/fi";
 import { useQuery } from "@tanstack/react-query";
 import { getEquipmentList, getCategories } from "../../api/equipment";
 import type { Equipment } from "../../types/equipment";
 import EquipmentDetailModal from "../equipment/EquipmentDetailModal";
 import { resolveEquipmentImage } from "../../constants/equipmentImageOverrides";
+import PageHeader from "../../components/PageHeader";
 
 const CATEGORY_ORDER = [
   "蘇生講習資機材",
@@ -102,6 +104,11 @@ export default function EquipmentListView() {
 
   return (
     <Box>
+      <PageHeader
+        title="資機材一覧"
+        description="利用可能な資機材の一覧です。クリックすると詳細情報を確認できます。"
+        icon={FiPackage}
+      />
       {/* 検索・フィルタ */}
       <HStack as="form" onSubmit={handleSearch} mb={6} spacing={4}>
         <InputGroup maxW="300px">

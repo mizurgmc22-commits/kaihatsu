@@ -1,7 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import {
   Box,
-  Heading,
   Flex,
   Select,
   useDisclosure,
@@ -12,6 +11,7 @@ import {
   FormControl,
   FormLabel,
 } from "@chakra-ui/react";
+import { FiCalendar } from "react-icons/fi";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -25,6 +25,7 @@ import {
 import type { AvailableEquipment } from "../../types/reservation";
 import AvailableEquipmentModal from "./AvailableEquipmentModal";
 import ReservationFormModal from "./ReservationFormModal";
+import PageHeader from "../../components/PageHeader";
 
 export default function ReservationCalendar() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -130,8 +131,12 @@ export default function ReservationCalendar() {
 
   return (
     <Box>
-      <Flex justify="space-between" align="center" mb={6}>
-        <Heading size="lg">予約カレンダー</Heading>
+      <PageHeader
+        title="予約カレンダー"
+        description="カレンダーから日付を選択して資機材を予約できます。日付をクリックして利用可能な機材を確認してください。"
+        icon={FiCalendar}
+      />
+      <Flex justify="flex-end" mb={4}>
         <HStack spacing={4}>
           <FormControl maxW="200px">
             <FormLabel htmlFor="category-filter" srOnly>

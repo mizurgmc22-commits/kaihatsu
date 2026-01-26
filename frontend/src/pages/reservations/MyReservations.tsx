@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   Box,
-  Heading,
   VStack,
   HStack,
   Input,
@@ -32,9 +31,11 @@ import {
   AlertIcon,
   Spinner,
 } from "@chakra-ui/react";
+import { FiClock } from "react-icons/fi";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getMyReservations, cancelMyReservation } from "../../api/reservation";
 import type { Reservation } from "../../types/reservation";
+import PageHeader from "../../components/PageHeader";
 
 export default function MyReservations() {
   const [contactInfo, setContactInfo] = useState("");
@@ -139,9 +140,11 @@ export default function MyReservations() {
 
   return (
     <Box>
-      <Heading size="lg" mb={6}>
-        予約履歴確認
-      </Heading>
+      <PageHeader
+        title="予約履歴"
+        description="過去の予約履歴を確認できます。連絡先を入力して検索してください。"
+        icon={FiClock}
+      />
 
       {/* 検索フォーム */}
       <Card mb={6}>

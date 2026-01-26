@@ -4,7 +4,6 @@ import {
   Link,
   Icon,
   Text,
-  Divider,
   Flex,
   IconButton,
   Tooltip,
@@ -14,11 +13,9 @@ import {
   FiHome,
   FiCalendar,
   FiPackage,
-  FiSettings,
-  FiList,
+  FiClock,
   FiChevronLeft,
   FiChevronRight,
-  FiEdit,
 } from "react-icons/fi";
 
 interface NavItemProps {
@@ -61,32 +58,25 @@ function NavItem({
   );
 }
 
-interface AdminSidebarProps {
+interface UserSidebarProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   onNavigate?: () => void;
 }
 
-export default function AdminSidebar({
+export default function UserSidebar({
   isCollapsed = false,
   onToggleCollapse,
   onNavigate,
-}: AdminSidebarProps) {
+}: UserSidebarProps) {
   const location = useLocation();
   const currentPath = location.pathname;
 
   const navItems = [
-    { to: "/admin", icon: FiHome, label: "ダッシュボード" },
-    {
-      to: "/admin/dashboard-content",
-      icon: FiEdit,
-      label: "トップページ編集",
-    },
-    { to: "/admin/reservations", icon: FiCalendar, label: "予約管理" },
-    { to: "/admin/calendar", icon: FiCalendar, label: "管理カレンダー" },
-    { to: "/admin/gantt", icon: FiCalendar, label: "ガントチャート" },
-    { to: "/admin/equipment", icon: FiPackage, label: "資機材管理" },
-    { to: "/admin/settings", icon: FiSettings, label: "設定" },
+    { to: "/", icon: FiHome, label: "トップページ" },
+    { to: "/calendar", icon: FiCalendar, label: "予約カレンダー" },
+    { to: "/equipment", icon: FiPackage, label: "資機材一覧" },
+    { to: "/history", icon: FiClock, label: "予約履歴" },
   ];
 
   return (
@@ -127,18 +117,6 @@ export default function AdminSidebar({
       </Flex>
 
       <VStack spacing={1} align="stretch" px={isCollapsed ? 0 : 2}>
-        {!isCollapsed && (
-          <Text
-            px={4}
-            py={2}
-            fontSize="xs"
-            fontWeight="bold"
-            color="gray.500"
-            textTransform="uppercase"
-          >
-            管理メニュー
-          </Text>
-        )}
         {navItems.map((item) => (
           <NavItem
             key={item.to}
@@ -146,39 +124,14 @@ export default function AdminSidebar({
             icon={item.icon}
             label={item.label}
             isActive={
-              item.to === "/admin"
-                ? currentPath === "/admin"
+              item.to === "/"
+                ? currentPath === "/"
                 : currentPath.startsWith(item.to)
             }
             isCollapsed={isCollapsed}
             onNavigate={onNavigate}
           />
         ))}
-      </VStack>
-
-      <Divider my={4} />
-
-      <VStack spacing={1} align="stretch" px={isCollapsed ? 0 : 2}>
-        {!isCollapsed && (
-          <Text
-            px={4}
-            py={2}
-            fontSize="xs"
-            fontWeight="bold"
-            color="gray.500"
-            textTransform="uppercase"
-          >
-            ユーザー向け
-          </Text>
-        )}
-        <NavItem
-          to="/"
-          icon={FiList}
-          label="予約カレンダー"
-          isActive={false}
-          isCollapsed={isCollapsed}
-          onNavigate={onNavigate}
-        />
       </VStack>
     </Box>
   );
