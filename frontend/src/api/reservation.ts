@@ -120,6 +120,20 @@ export const getAvailableEquipment = async (
     (doc) => ({ id: doc.id, ...doc.data() }) as any,
   );
 
+  // カテゴリ情報を取得してマッピング
+  const categoryRef = collection(db, "categories");
+  const categorySnap = await getDocs(categoryRef);
+  const categoryMap = new Map(
+    categorySnap.docs.map((doc) => [
+      doc.id,
+      {
+        id: doc.id,
+        name: doc.data().name,
+        description: doc.data().description,
+      },
+    ]),
+  );
+
   const targetDate = new Date(date);
   const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0)).toISOString();
   const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999)).toISOString();
@@ -146,8 +160,12 @@ export const getAvailableEquipment = async (
       )
       .reduce((sum, r) => sum + (r.quantity || 0), 0);
 
+    // カテゴリ情報を付与
+    const category = eq.categoryId ? categoryMap.get(eq.categoryId) : undefined;
+
     return {
       ...eq,
+      category,
       remainingQuantity: eq.quantity - used,
       isAvailable: eq.quantity - used > 0 || eq.isUnlimited,
       isUnlimited: eq.isUnlimited || false,

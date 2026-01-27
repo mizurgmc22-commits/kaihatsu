@@ -2,14 +2,11 @@ import { useState, useCallback, useRef } from "react";
 import {
   Box,
   Flex,
-  Select,
   useDisclosure,
   Spinner,
   Text,
   HStack,
   Badge,
-  FormControl,
-  FormLabel,
 } from "@chakra-ui/react";
 import { FiCalendar } from "react-icons/fi";
 import FullCalendar from "@fullcalendar/react";
@@ -23,15 +20,17 @@ import {
   type CalendarEvent,
 } from "../../api/reservation";
 import type { AvailableEquipment } from "../../types/reservation";
+import CategorySelectionModal from "./CategorySelectionModal";
 import AvailableEquipmentModal from "./AvailableEquipmentModal";
 import ReservationFormModal from "./ReservationFormModal";
 import PageHeader from "../../components/PageHeader";
 
 export default function ReservationCalendar() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState<string>("");
-  const [selectedEquipment, setSelectedEquipment] =
-    useState<AvailableEquipment | null>(null);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+  const [selectedEquipmentList, setSelectedEquipmentList] = useState<
+    AvailableEquipment[]
+  >([]);
   const [customEquipmentName, setCustomEquipmentName] = useState<string | null>(
     null,
   );
@@ -42,12 +41,21 @@ export default function ReservationCalendar() {
   const calendarRef = useRef<FullCalendar>(null);
   const queryClient = useQueryClient();
 
+  // Step 1: カテゴリ選択モーダル
+  const {
+    isOpen: isCategoryModalOpen,
+    onOpen: onCategoryModalOpen,
+    onClose: onCategoryModalClose,
+  } = useDisclosure();
+
+  // Step 2: 機器選択モーダル
   const {
     isOpen: isEquipmentModalOpen,
     onOpen: onEquipmentModalOpen,
     onClose: onEquipmentModalClose,
   } = useDisclosure();
 
+  // Step 3: 予約フォームモーダル
   const {
     isOpen: isFormModalOpen,
     onOpen: onFormModalOpen,
@@ -60,11 +68,10 @@ export default function ReservationCalendar() {
     queryFn: getCategories,
   });
 
-  // 選択日の予約可能機器取得
+  // 選択日の予約可能機器取得（カテゴリフィルターなしで全取得）
   const { data: availableEquipment, isLoading: isLoadingEquipment } = useQuery({
-    queryKey: ["availableEquipment", selectedDate, categoryFilter],
-    queryFn: () =>
-      getAvailableEquipment(selectedDate!, categoryFilter || undefined),
+    queryKey: ["availableEquipment", selectedDate],
+    queryFn: () => getAvailableEquipment(selectedDate!, undefined),
     enabled: !!selectedDate,
   });
 
@@ -83,7 +90,7 @@ export default function ReservationCalendar() {
     [],
   );
 
-  // 日付クリック時
+  // 日付クリック時 → Step 1: カテゴリ選択モーダルを開く
   const handleDateClick = useCallback(
     (info: { dateStr: string }) => {
       const today = new Date();
@@ -96,35 +103,68 @@ export default function ReservationCalendar() {
       }
 
       setSelectedDate(info.dateStr);
-      onEquipmentModalOpen();
+      setSelectedCategoryIds([]);
+      setSelectedEquipmentList([]);
+      setCustomEquipmentName(null);
+      onCategoryModalOpen();
     },
-    [onEquipmentModalOpen],
+    [onCategoryModalOpen],
   );
 
-  // 機器選択時
-  const handleEquipmentSelect = (equipment: AvailableEquipment) => {
+  // Step 1 → Step 2: カテゴリ選択後、機器選択モーダルへ
+  const handleCategoryProceed = (categoryIds: string[]) => {
+    setSelectedCategoryIds(categoryIds);
+    onCategoryModalClose();
+    onEquipmentModalOpen();
+  };
+
+  // Step 2 → Step 3: 機器選択後、予約フォームモーダルへ
+  const handleEquipmentProceed = (equipment: AvailableEquipment[]) => {
     setCustomEquipmentName(null);
-    setSelectedEquipment(equipment);
+    setSelectedEquipmentList(equipment);
     onEquipmentModalClose();
     onFormModalOpen();
   };
 
+  // Step 2: カスタム機器予約 → Step 3
   const handleCustomReserve = (name: string) => {
-    setSelectedEquipment(null);
+    setSelectedEquipmentList([]);
     setCustomEquipmentName(name);
     onEquipmentModalClose();
     onFormModalOpen();
   };
 
+  // Step 1: カテゴリモーダルからカスタム機器予約 → Step 3
+  const handleCustomReserveFromCategory = (name: string) => {
+    setSelectedEquipmentList([]);
+    setCustomEquipmentName(name);
+    onCategoryModalClose();
+    onFormModalOpen();
+  };
+
+  // Step 2 → Step 1: 戻る
+  const handleEquipmentBack = () => {
+    onEquipmentModalClose();
+    onCategoryModalOpen();
+  };
+
+  // Step 3 → Step 2: 戻る
+  const handleFormBack = () => {
+    onFormModalClose();
+    onEquipmentModalOpen();
+  };
+
+  // モーダルを閉じる
   const handleFormModalClose = () => {
     onFormModalClose();
-    setSelectedEquipment(null);
+    setSelectedEquipmentList([]);
     setCustomEquipmentName(null);
   };
 
   // 予約完了時
   const handleReservationComplete = () => {
     handleFormModalClose();
+    setSelectedCategoryIds([]);
     // カレンダーイベントを再取得
     queryClient.invalidateQueries({ queryKey: ["calendarEvents"] });
   };
@@ -136,29 +176,6 @@ export default function ReservationCalendar() {
         description="カレンダーから日付を選択して資機材を予約できます。日付をクリックして利用可能な機材を確認してください。"
         icon={FiCalendar}
       />
-      <Flex justify="flex-end" mb={4}>
-        <HStack spacing={4}>
-          <FormControl maxW="200px">
-            <FormLabel htmlFor="category-filter" srOnly>
-              カテゴリフィルタ
-            </FormLabel>
-            <Select
-              id="category-filter"
-              aria-label="カテゴリフィルタ"
-              placeholder="カテゴリで絞り込み"
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              bg="white"
-            >
-              {categories?.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </Select>
-          </FormControl>
-        </HStack>
-      </Flex>
 
       <Box bg="white" p={4} borderRadius="md" shadow="sm">
         <HStack mb={4} spacing={4}>
@@ -204,27 +221,38 @@ export default function ReservationCalendar() {
         />
       </Box>
 
-      {/* 予約可能機器モーダル */}
+      {/* Step 1: カテゴリ選択モーダル */}
+      <CategorySelectionModal
+        isOpen={isCategoryModalOpen}
+        onClose={onCategoryModalClose}
+        date={selectedDate}
+        categories={categories || []}
+        onProceed={handleCategoryProceed}
+        onCustomReserve={handleCustomReserveFromCategory}
+      />
+
+      {/* Step 2: 機器選択モーダル */}
       <AvailableEquipmentModal
         isOpen={isEquipmentModalOpen}
         onClose={onEquipmentModalClose}
         date={selectedDate}
         equipment={availableEquipment || []}
         isLoading={isLoadingEquipment}
-        onSelect={handleEquipmentSelect}
-        categoryFilter={categoryFilter}
-        onCategoryChange={setCategoryFilter}
+        onProceed={handleEquipmentProceed}
+        onBack={handleEquipmentBack}
+        selectedCategoryIds={selectedCategoryIds}
         categories={categories || []}
         onCustomReserve={handleCustomReserve}
       />
 
-      {/* 予約フォームモーダル */}
+      {/* Step 3: 予約フォームモーダル */}
       <ReservationFormModal
         isOpen={isFormModalOpen}
         onClose={handleFormModalClose}
-        equipment={selectedEquipment}
+        equipment={selectedEquipmentList}
         selectedDate={selectedDate}
         onComplete={handleReservationComplete}
+        onBack={handleFormBack}
         customEquipmentName={customEquipmentName}
       />
 

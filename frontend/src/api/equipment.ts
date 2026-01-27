@@ -98,6 +98,43 @@ export const getEquipmentList = async (
   const querySnapshot = await getDocs(q);
   let items = querySnapshot.docs.map(mapDocToEquipment);
 
+  // カテゴリ情報を取得してマッピング
+  const categoryRef = collection(db, "categories");
+  const categorySnap = await getDocs(categoryRef);
+  const categoryMap = new Map(
+    categorySnap.docs.map((catDoc) => {
+      const data = catDoc.data();
+      const parseDate = (val: any): string => {
+        if (!val) return new Date().toISOString();
+        if (typeof val === "string") return val;
+        if (val.toDate) return val.toDate().toISOString();
+        return new Date().toISOString();
+      };
+      return [
+        catDoc.id,
+        {
+          id: catDoc.id,
+          name: data.name as string,
+          description: data.description as string,
+          createdAt: parseDate(data.createdAt),
+          updatedAt: parseDate(data.updatedAt),
+        },
+      ];
+    }),
+  );
+
+  // 各機器にカテゴリ情報を付与
+  items = items.map((item) => {
+    const rawItem = item as any;
+    const category = rawItem.categoryId
+      ? categoryMap.get(rawItem.categoryId)
+      : undefined;
+    return {
+      ...item,
+      category,
+    } as Equipment;
+  });
+
   // クライアント側での検索フィルタ（Firestoreは全文検索が弱いため）
   if (params?.search) {
     const searchLower = params.search.toLowerCase();
@@ -215,16 +252,25 @@ export const deleteEquipment = async (id: string): Promise<void> => {
 // カテゴリ一覧取得
 export const getCategories = async (): Promise<EquipmentCategory[]> => {
   const querySnapshot = await getDocs(collection(db, "categories"));
-  return querySnapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-    createdAt:
-      (doc.data().createdAt as Timestamp)?.toDate().toISOString() ||
-      new Date().toISOString(),
-    updatedAt:
-      (doc.data().updatedAt as Timestamp)?.toDate().toISOString() ||
-      new Date().toISOString(),
-  })) as EquipmentCategory[];
+  return querySnapshot.docs.map((doc) => {
+    const data = doc.data();
+
+    // createdAt/updatedAt がTimestampの場合とstringの場合を両方処理
+    const parseDate = (val: any): string => {
+      if (!val) return new Date().toISOString();
+      if (typeof val === "string") return val;
+      if (val.toDate) return val.toDate().toISOString();
+      return new Date().toISOString();
+    };
+
+    return {
+      id: doc.id,
+      name: data.name,
+      description: data.description,
+      createdAt: parseDate(data.createdAt),
+      updatedAt: parseDate(data.updatedAt),
+    } as EquipmentCategory;
+  });
 };
 
 // カテゴリ作成
