@@ -1,12 +1,9 @@
 import { useState, useCallback, useRef } from "react";
 import {
   Box,
-  Flex,
-  useDisclosure,
-  Spinner,
-  Text,
   HStack,
   Badge,
+  useDisclosure,
 } from "@chakra-ui/react";
 import { FiCalendar } from "react-icons/fi";
 import FullCalendar from "@fullcalendar/react";
@@ -17,11 +14,11 @@ import { getCategories } from "../../api/equipment";
 import {
   getAvailableEquipment,
   getCalendarEvents,
-  type CalendarEvent,
 } from "../../api/reservation";
 import type { AvailableEquipment } from "../../types/reservation";
 import CategorySelectionModal from "./CategorySelectionModal";
 import AvailableEquipmentModal from "./AvailableEquipmentModal";
+import EquipmentConfirmModal from "./EquipmentConfirmModal";
 import ReservationFormModal from "./ReservationFormModal";
 import PageHeader from "../../components/PageHeader";
 
@@ -32,8 +29,9 @@ export default function ReservationCalendar() {
     AvailableEquipment[]
   >([]);
   const [customEquipmentName, setCustomEquipmentName] = useState<string | null>(
-    null,
+    null
   );
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [dateRange, setDateRange] = useState<{
     start: string;
     end: string;
@@ -55,7 +53,14 @@ export default function ReservationCalendar() {
     onClose: onEquipmentModalClose,
   } = useDisclosure();
 
-  // Step 3: 予約フォームモーダル
+  // Step 3: 機器確認モーダル
+  const {
+    isOpen: isConfirmModalOpen,
+    onOpen: onConfirmModalOpen,
+    onClose: onConfirmModalClose,
+  } = useDisclosure();
+
+  // Step 4: 予約フォームモーダル
   const {
     isOpen: isFormModalOpen,
     onOpen: onFormModalOpen,
@@ -68,7 +73,7 @@ export default function ReservationCalendar() {
     queryFn: getCategories,
   });
 
-  // 選択日の予約可能機器取得（カテゴリフィルターなしで全取得）
+  // 選択日の予約可能機器取得
   const { data: availableEquipment, isLoading: isLoadingEquipment } = useQuery({
     queryKey: ["availableEquipment", selectedDate],
     queryFn: () => getAvailableEquipment(selectedDate!, undefined),
@@ -87,7 +92,7 @@ export default function ReservationCalendar() {
     (dateInfo: { startStr: string; endStr: string }) => {
       setDateRange({ start: dateInfo.startStr, end: dateInfo.endStr });
     },
-    [],
+    []
   );
 
   // 日付クリック時 → Step 1: カテゴリ選択モーダルを開く
@@ -97,7 +102,6 @@ export default function ReservationCalendar() {
       today.setHours(0, 0, 0, 0);
       const clickedDate = new Date(info.dateStr);
 
-      // 過去の日付は選択不可
       if (clickedDate < today) {
         return;
       }
@@ -106,9 +110,10 @@ export default function ReservationCalendar() {
       setSelectedCategoryIds([]);
       setSelectedEquipmentList([]);
       setCustomEquipmentName(null);
+      setQuantities({});
       onCategoryModalOpen();
     },
-    [onCategoryModalOpen],
+    [onCategoryModalOpen]
   );
 
   // Step 1 → Step 2: カテゴリ選択後、機器選択モーダルへ
@@ -118,12 +123,12 @@ export default function ReservationCalendar() {
     onEquipmentModalOpen();
   };
 
-  // Step 2 → Step 3: 機器選択後、予約フォームモーダルへ
+  // Step 2 → Step 3: 機器選択後、機器確認モーダルへ
   const handleEquipmentProceed = (equipment: AvailableEquipment[]) => {
     setCustomEquipmentName(null);
     setSelectedEquipmentList(equipment);
     onEquipmentModalClose();
-    onFormModalOpen();
+    onConfirmModalOpen();
   };
 
   // Step 2: カスタム機器予約 → Step 3
@@ -131,7 +136,7 @@ export default function ReservationCalendar() {
     setSelectedEquipmentList([]);
     setCustomEquipmentName(name);
     onEquipmentModalClose();
-    onFormModalOpen();
+    onConfirmModalOpen();
   };
 
   // Step 1: カテゴリモーダルからカスタム機器予約 → Step 3
@@ -139,7 +144,7 @@ export default function ReservationCalendar() {
     setSelectedEquipmentList([]);
     setCustomEquipmentName(name);
     onCategoryModalClose();
-    onFormModalOpen();
+    onConfirmModalOpen();
   };
 
   // Step 2 → Step 1: 戻る
@@ -149,14 +154,34 @@ export default function ReservationCalendar() {
   };
 
   // Step 3 → Step 2: 戻る
+  const handleConfirmBack = () => {
+    onConfirmModalClose();
+    onEquipmentModalOpen();
+  };
+
+  // Step 3 → Step 4: 機器確認後、予約フォームへ
+  const handleConfirmProceed = (newQuantities: Record<string, number>) => {
+    setQuantities(newQuantities);
+    onConfirmModalClose();
+    onFormModalOpen();
+  };
+
+  // Step 4 → Step 3: 戻る
   const handleFormBack = () => {
     onFormModalClose();
-    onEquipmentModalOpen();
+    onConfirmModalOpen();
   };
 
   // モーダルを閉じる
   const handleFormModalClose = () => {
     onFormModalClose();
+    setSelectedEquipmentList([]);
+    setCustomEquipmentName(null);
+    setQuantities({});
+  };
+
+  const handleConfirmModalClose = () => {
+    onConfirmModalClose();
     setSelectedEquipmentList([]);
     setCustomEquipmentName(null);
   };
@@ -165,8 +190,12 @@ export default function ReservationCalendar() {
   const handleReservationComplete = () => {
     handleFormModalClose();
     setSelectedCategoryIds([]);
-    // カレンダーイベントを再取得
     queryClient.invalidateQueries({ queryKey: ["calendarEvents"] });
+  };
+
+  // カスタム機器名変更
+  const handleCustomEquipmentNameChange = (name: string) => {
+    setCustomEquipmentName(name);
   };
 
   return (
@@ -245,7 +274,19 @@ export default function ReservationCalendar() {
         onCustomReserve={handleCustomReserve}
       />
 
-      {/* Step 3: 予約フォームモーダル */}
+      {/* Step 3: 機器確認モーダル */}
+      <EquipmentConfirmModal
+        isOpen={isConfirmModalOpen}
+        onClose={handleConfirmModalClose}
+        equipment={selectedEquipmentList}
+        selectedDate={selectedDate}
+        onProceed={handleConfirmProceed}
+        onBack={handleConfirmBack}
+        customEquipmentName={customEquipmentName}
+        onCustomEquipmentNameChange={handleCustomEquipmentNameChange}
+      />
+
+      {/* Step 4: 予約フォームモーダル */}
       <ReservationFormModal
         isOpen={isFormModalOpen}
         onClose={handleFormModalClose}
@@ -254,6 +295,7 @@ export default function ReservationCalendar() {
         onComplete={handleReservationComplete}
         onBack={handleFormBack}
         customEquipmentName={customEquipmentName}
+        quantities={quantities}
       />
 
       <style>{`
