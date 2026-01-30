@@ -67,7 +67,7 @@ interface FormData {
   startTime: string;
   endDate: string;
   endTime: string;
-  quantity: number;
+  quantities: Record<string, number>;
   purpose: string;
   location: string;
   notes: string;
@@ -110,7 +110,7 @@ export default function ReservationFormModal({
       startTime: "09:00",
       endDate: "",
       endTime: "18:00",
-      quantity: 1,
+      quantities: {},
       purpose: "",
       location: "",
       notes: "",
@@ -118,11 +118,20 @@ export default function ReservationFormModal({
     },
   });
 
-  const watchQuantity = watch("quantity");
+  const watchQuantities = watch("quantities");
 
   // フォームリセット
   useEffect(() => {
     if (isOpen && selectedDate) {
+      const initialQuantities: Record<string, number> = {};
+      if (equipment.length > 0) {
+        equipment.forEach((eq) => {
+          initialQuantities[eq.id] = 1;
+        });
+      } else {
+        initialQuantities["custom"] = 1;
+      }
+
       reset({
         department: "",
         applicantName: "",
@@ -131,14 +140,14 @@ export default function ReservationFormModal({
         startTime: "09:00",
         endDate: selectedDate,
         endTime: "18:00",
-        quantity: 1,
+        quantities: initialQuantities,
         purpose: "",
         location: "",
         notes: "",
         customEquipmentName: customEquipmentName || "",
       });
     }
-  }, [isOpen, selectedDate, customEquipmentName, reset]);
+  }, [isOpen, selectedDate, customEquipmentName, reset, equipment]);
 
   // 予約作成
   const createMutation = useMutation({
@@ -193,7 +202,6 @@ export default function ReservationFormModal({
       contactInfo: data.contactInfo,
       startTime: `${data.startDate}T${data.startTime}:00`,
       endTime: `${data.endDate}T${data.endTime}:00`,
-      quantity: data.quantity,
       purpose: data.purpose || null,
       location: data.location || null,
       notes: data.notes || null,
@@ -206,6 +214,7 @@ export default function ReservationFormModal({
       reservations = equipment.map((eq) => ({
         ...baseReservation,
         equipmentId: eq.id,
+        quantity: data.quantities[eq.id] || 1,
       }));
     } else {
       // カスタム機器
@@ -213,6 +222,7 @@ export default function ReservationFormModal({
         {
           ...baseReservation,
           customEquipmentName: data.customEquipmentName.trim(),
+          quantity: data.quantities["custom"] || 1,
         },
       ];
     }
@@ -231,22 +241,20 @@ export default function ReservationFormModal({
     });
   };
 
-  // 数量超過チェック（複数機器の場合は最小の残数でチェック）
-  const minRemainingQuantity =
-    equipment.length > 0
-      ? Math.min(
-          ...equipment
-            .filter((e) => !e.isUnlimited)
-            .map((e) => e.remainingQuantity),
-        )
-      : Infinity;
-
-  const hasUnlimitedEquipment = equipment.some((e) => e.isUnlimited);
-  const isQuantityExceeded =
-    !hasUnlimitedEquipment &&
+  // 数量超過チェックのロジックは各Control内で実施するため、ここではグローバルのフラグだけ計算（Submitボタン無効化用）
+  const isAnyQuantityExceeded =
     equipment.length > 0 &&
-    minRemainingQuantity !== Infinity &&
-    Number(watchQuantity) > minRemainingQuantity;
+    equipment.some((eq) => {
+      if (eq.isUnlimited) return false;
+      const qty = watchQuantities?.[eq.id] || 0;
+      return qty > eq.remainingQuantity;
+    });
+
+  // カスタム機器の数量チェック（カスタムの場合は制限なしだが、念のため）
+  const isCustomQuantityInvalid =
+    equipment.length === 0 && (watchQuantities?.["custom"] || 0) < 1;
+
+  const isSubmitDisabled = isAnyQuantityExceeded || isCustomQuantityInvalid;
 
   // 戻る
   const handleBack = () => {
@@ -278,7 +286,14 @@ export default function ReservationFormModal({
 
         <ModalCloseButton color="white" />
 
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <Box
+          as="form"
+          onSubmit={handleSubmit(onSubmit)}
+          display="flex"
+          flexDirection="column"
+          flex={1}
+          overflow="hidden"
+        >
           <ModalBody py={6}>
             <VStack spacing={6} align="stretch">
               {/* 選択した機器一覧 */}
@@ -304,6 +319,10 @@ export default function ReservationFormModal({
                         eq.name,
                         eq.imageUrl,
                       );
+                      const currentQty = watchQuantities?.[eq.id] || 1;
+                      const isExceeded =
+                        !eq.isUnlimited && currentQty > eq.remainingQuantity;
+
                       return (
                         <HStack
                           key={eq.id}
@@ -312,6 +331,7 @@ export default function ReservationFormModal({
                           borderRadius="lg"
                           borderWidth="1px"
                           spacing={3}
+                          alignItems="center"
                         >
                           {imageSrc && (
                             <Image
@@ -331,15 +351,52 @@ export default function ReservationFormModal({
                             >
                               {eq.name}
                             </Text>
-                            <Text fontSize="xs" color="gray.500">
-                              {eq.category?.name || "その他"}
-                            </Text>
+                            <HStack spacing={2} align="center" mt={1}>
+                              <Text fontSize="xs" color="gray.500">
+                                {eq.category?.name || "その他"}
+                              </Text>
+                              {!eq.isUnlimited && (
+                                <Badge colorScheme="green" fontSize="xs">
+                                  残 {eq.remainingQuantity}
+                                </Badge>
+                              )}
+                            </HStack>
                           </Box>
-                          {!eq.isUnlimited && (
-                            <Badge colorScheme="green" fontSize="xs">
-                              残 {eq.remainingQuantity}
-                            </Badge>
-                          )}
+                          <Box width="80px">
+                            <Controller
+                              name={`quantities.${eq.id}`}
+                              control={control}
+                              rules={{
+                                required: true,
+                                min: 1,
+                                max: eq.isUnlimited
+                                  ? undefined
+                                  : eq.remainingQuantity,
+                              }}
+                              render={({ field }) => (
+                                <NumberInput
+                                  min={1}
+                                  max={
+                                    eq.isUnlimited
+                                      ? undefined
+                                      : eq.remainingQuantity
+                                  }
+                                  value={field.value}
+                                  onChange={(_, val) =>
+                                    field.onChange(val || 1)
+                                  }
+                                  size="sm"
+                                  isInvalid={isExceeded}
+                                >
+                                  <NumberInputField borderRadius="md" />
+                                  <NumberInputStepper>
+                                    <NumberIncrementStepper />
+                                    <NumberDecrementStepper />
+                                  </NumberInputStepper>
+                                </NumberInput>
+                              )}
+                            />
+                          </Box>
                         </HStack>
                       );
                     })}
@@ -489,51 +546,42 @@ export default function ReservationFormModal({
                 </VStack>
               </Box>
 
-              <Divider />
-
-              {/* 数量 */}
-              <FormControl isRequired isInvalid={isQuantityExceeded}>
-                <FormLabel>
-                  <HStack spacing={2}>
-                    <Icon as={FiPackage} color="gray.500" />
-                    <Text fontWeight="bold">数量（各機器ごと）</Text>
-                  </HStack>
-                </FormLabel>
-                <Controller
-                  name="quantity"
-                  control={control}
-                  rules={{
-                    required: true,
-                    min: 1,
-                    max: hasUnlimitedEquipment
-                      ? undefined
-                      : minRemainingQuantity,
-                  }}
-                  render={({ field }) => (
-                    <NumberInput
-                      min={1}
-                      max={
-                        hasUnlimitedEquipment ? undefined : minRemainingQuantity
-                      }
-                      value={field.value}
-                      onChange={(_, val) => field.onChange(val || 1)}
-                      maxW="150px"
-                    >
-                      <NumberInputField borderRadius="lg" />
-                      <NumberInputStepper>
-                        <NumberIncrementStepper />
-                        <NumberDecrementStepper />
-                      </NumberInputStepper>
-                    </NumberInput>
-                  )}
-                />
-                {isQuantityExceeded && (
-                  <Alert status="error" mt={2} borderRadius="lg">
-                    <AlertIcon />
-                    予約可能数を超えています（最大: {minRemainingQuantity}）
-                  </Alert>
-                )}
-              </FormControl>
+              {/* 数量（カスタム機器のみ） */}
+              {equipment.length === 0 && (
+                <>
+                  <Divider />
+                  <FormControl isRequired>
+                    <FormLabel>
+                      <HStack spacing={2}>
+                        <Icon as={FiPackage} color="gray.500" />
+                        <Text fontWeight="bold">数量</Text>
+                      </HStack>
+                    </FormLabel>
+                    <Controller
+                      name="quantities.custom"
+                      control={control}
+                      rules={{
+                        required: true,
+                        min: 1,
+                      }}
+                      render={({ field }) => (
+                        <NumberInput
+                          min={1}
+                          value={field.value}
+                          onChange={(_, val) => field.onChange(val || 1)}
+                          maxW="150px"
+                        >
+                          <NumberInputField borderRadius="lg" />
+                          <NumberInputStepper>
+                            <NumberIncrementStepper />
+                            <NumberDecrementStepper />
+                          </NumberInputStepper>
+                        </NumberInput>
+                      )}
+                    />
+                  </FormControl>
+                </>
+              )}
 
               <Divider />
 
@@ -606,7 +654,7 @@ export default function ReservationFormModal({
                   type="submit"
                   rightIcon={<FiCheck />}
                   isLoading={createMutation.isPending}
-                  isDisabled={isQuantityExceeded}
+                  isDisabled={isSubmitDisabled}
                   bgGradient={gradientBg}
                   color="white"
                   _hover={{
@@ -623,7 +671,7 @@ export default function ReservationFormModal({
               </HStack>
             </HStack>
           </ModalFooter>
-        </form>
+        </Box>
       </ModalContent>
     </Modal>
   );
