@@ -345,13 +345,45 @@ export const getMyReservations = async (
   params: MyReservationParams,
 ): Promise<ReservationListResponse> => {
   const resRef = collection(db, "reservations");
+  // 複合インデックスを避けるため、単一フィールドクエリを使用
   const q = query(
     resRef,
     where("contactInfo", "==", params.contactInfo),
-    orderBy("startTime", "desc"),
   );
   const querySnapshot = await getDocs(q);
-  const items = querySnapshot.docs.map(mapDocToReservation);
+  // クライアント側でソート（最新順）
+  const now = new Date().toISOString();
+  let items = querySnapshot.docs
+    .map(mapDocToReservation)
+    // 借用期間（返却日）が過ぎたものを除外
+    .filter((item) => item.endTime >= now)
+    .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+
+  // 機材情報を取得して紐づける
+  const eqSnap = await getDocs(collection(db, "equipments"));
+  const eqMap = new Map(
+    eqSnap.docs.map((doc) => [doc.id, { id: doc.id, name: doc.data().name, categoryId: doc.data().categoryId }])
+  );
+
+  // カテゴリ情報を取得
+  const categorySnap = await getDocs(collection(db, "categories"));
+  const categoryMap = new Map(
+    categorySnap.docs.map((doc) => [doc.id, { id: doc.id, name: doc.data().name }])
+  );
+
+  // 予約に機材情報を紐づけ
+  items = items.map((item) => {
+    const equipment = item.equipmentId ? eqMap.get(item.equipmentId) : undefined;
+    const category = equipment?.categoryId ? categoryMap.get(equipment.categoryId) : undefined;
+    return {
+      ...item,
+      equipment: equipment ? {
+        id: equipment.id,
+        name: equipment.name,
+        category: category,
+      } : undefined,
+    } as Reservation;
+  });
 
   return {
     items,

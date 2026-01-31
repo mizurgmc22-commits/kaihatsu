@@ -8,6 +8,7 @@ import {
 import { FiCalendar } from "react-icons/fi";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
+import multiMonthPlugin from "@fullcalendar/multimonth";
 import interactionPlugin from "@fullcalendar/interaction";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCategories } from "../../api/equipment";
@@ -19,7 +20,9 @@ import type { AvailableEquipment } from "../../types/reservation";
 import CategorySelectionModal from "./CategorySelectionModal";
 import AvailableEquipmentModal from "./AvailableEquipmentModal";
 import EquipmentConfirmModal from "./EquipmentConfirmModal";
-import ReservationFormModal from "./ReservationFormModal";
+import ApplicantInfoModal, { type ApplicantData } from "./ApplicantInfoModal";
+import UsagePeriodModal, { type UsagePeriodData } from "./UsagePeriodModal";
+import UsageDetailsModal, { type UsageDetailsData } from "./UsageDetailsModal";
 import PageHeader from "../../components/PageHeader";
 
 export default function ReservationCalendar() {
@@ -36,6 +39,12 @@ export default function ReservationCalendar() {
     start: string;
     end: string;
   } | null>(null);
+
+  // フォームデータを管理
+  const [applicantData, setApplicantData] = useState<ApplicantData | null>(null);
+  const [usagePeriodData, setUsagePeriodData] = useState<UsagePeriodData | null>(null);
+  const [usageDetailsData, setUsageDetailsData] = useState<UsageDetailsData | null>(null);
+
   const calendarRef = useRef<FullCalendar>(null);
   const queryClient = useQueryClient();
 
@@ -60,11 +69,25 @@ export default function ReservationCalendar() {
     onClose: onConfirmModalClose,
   } = useDisclosure();
 
-  // Step 4: 予約フォームモーダル
+  // Step 4: 申請者情報モーダル
   const {
-    isOpen: isFormModalOpen,
-    onOpen: onFormModalOpen,
-    onClose: onFormModalClose,
+    isOpen: isApplicantModalOpen,
+    onOpen: onApplicantModalOpen,
+    onClose: onApplicantModalClose,
+  } = useDisclosure();
+
+  // Step 5: 利用期間モーダル
+  const {
+    isOpen: isUsagePeriodModalOpen,
+    onOpen: onUsagePeriodModalOpen,
+    onClose: onUsagePeriodModalClose,
+  } = useDisclosure();
+
+  // Step 6: 利用詳細モーダル
+  const {
+    isOpen: isUsageDetailsModalOpen,
+    onOpen: onUsageDetailsModalOpen,
+    onClose: onUsageDetailsModalClose,
   } = useDisclosure();
 
   // カテゴリ一覧取得
@@ -111,6 +134,9 @@ export default function ReservationCalendar() {
       setSelectedEquipmentList([]);
       setCustomEquipmentName(null);
       setQuantities({});
+      setApplicantData(null);
+      setUsagePeriodData(null);
+      setUsageDetailsData(null);
       onCategoryModalOpen();
     },
     [onCategoryModalOpen]
@@ -159,25 +185,59 @@ export default function ReservationCalendar() {
     onEquipmentModalOpen();
   };
 
-  // Step 3 → Step 4: 機器確認後、予約フォームへ
+  // Step 3 → Step 4: 機器確認後、申請者情報モーダルへ
   const handleConfirmProceed = (newQuantities: Record<string, number>) => {
     setQuantities(newQuantities);
     onConfirmModalClose();
-    onFormModalOpen();
+    onApplicantModalOpen();
   };
 
   // Step 4 → Step 3: 戻る
-  const handleFormBack = () => {
-    onFormModalClose();
+  const handleApplicantBack = () => {
+    onApplicantModalClose();
     onConfirmModalOpen();
   };
 
-  // モーダルを閉じる
-  const handleFormModalClose = () => {
-    onFormModalClose();
+  // Step 4 → Step 5: 申請者情報入力後、利用期間モーダルへ
+  const handleApplicantProceed = (data: ApplicantData) => {
+    setApplicantData(data);
+    onApplicantModalClose();
+    onUsagePeriodModalOpen();
+  };
+
+  // Step 5 → Step 4: 戻る
+  const handleUsagePeriodBack = () => {
+    onUsagePeriodModalClose();
+    onApplicantModalOpen();
+  };
+
+  // Step 5 → Step 6: 利用期間入力後、利用詳細モーダルへ
+  const handleUsagePeriodProceed = (data: UsagePeriodData) => {
+    setUsagePeriodData(data);
+    onUsagePeriodModalClose();
+    onUsageDetailsModalOpen();
+  };
+
+  // Step 6 → Step 5: 戻る
+  const handleUsageDetailsBack = () => {
+    onUsageDetailsModalClose();
+    onUsagePeriodModalOpen();
+  };
+
+  // 全てのモーダルを閉じてリセット
+  const handleCloseAll = () => {
+    onCategoryModalClose();
+    onEquipmentModalClose();
+    onConfirmModalClose();
+    onApplicantModalClose();
+    onUsagePeriodModalClose();
+    onUsageDetailsModalClose();
     setSelectedEquipmentList([]);
     setCustomEquipmentName(null);
     setQuantities({});
+    setApplicantData(null);
+    setUsagePeriodData(null);
+    setUsageDetailsData(null);
   };
 
   const handleConfirmModalClose = () => {
@@ -188,7 +248,7 @@ export default function ReservationCalendar() {
 
   // 予約完了時
   const handleReservationComplete = () => {
-    handleFormModalClose();
+    handleCloseAll();
     setSelectedCategoryIds([]);
     queryClient.invalidateQueries({ queryKey: ["calendarEvents"] });
   };
@@ -221,18 +281,25 @@ export default function ReservationCalendar() {
 
         <FullCalendar
           ref={calendarRef}
-          plugins={[dayGridPlugin, interactionPlugin]}
-          initialView="dayGridMonth"
+          plugins={[dayGridPlugin, multiMonthPlugin, interactionPlugin]}
+          initialView="multiMonth3Month"
+          views={{
+            multiMonth3Month: {
+              type: "multiMonth",
+              duration: { months: 3 },
+            },
+          }}
           locale="ja"
           headerToolbar={{
             left: "prev,next today",
             center: "title",
-            right: "dayGridMonth,dayGridWeek",
+            right: "multiMonth3Month,dayGridMonth,dayGridWeek",
           }}
           buttonText={{
             today: "今日",
-            month: "月",
+            month: "1ヶ月",
             week: "週",
+            multiMonth3Month: "3ヶ月",
           }}
           height="auto"
           events={calendarEvents || []}
@@ -286,16 +353,39 @@ export default function ReservationCalendar() {
         onCustomEquipmentNameChange={handleCustomEquipmentNameChange}
       />
 
-      {/* Step 4: 予約フォームモーダル */}
-      <ReservationFormModal
-        isOpen={isFormModalOpen}
-        onClose={handleFormModalClose}
-        equipment={selectedEquipmentList}
+      {/* Step 4: 申請者情報モーダル */}
+      <ApplicantInfoModal
+        isOpen={isApplicantModalOpen}
+        onClose={handleCloseAll}
+        selectedDate={selectedDate}
+        onProceed={handleApplicantProceed}
+        onBack={handleApplicantBack}
+        initialData={applicantData || undefined}
+      />
+
+      {/* Step 5: 利用期間モーダル */}
+      <UsagePeriodModal
+        isOpen={isUsagePeriodModalOpen}
+        onClose={handleCloseAll}
+        selectedDate={selectedDate}
+        onProceed={handleUsagePeriodProceed}
+        onBack={handleUsagePeriodBack}
+        initialData={usagePeriodData || undefined}
+      />
+
+      {/* Step 6: 利用詳細モーダル */}
+      <UsageDetailsModal
+        isOpen={isUsageDetailsModalOpen}
+        onClose={handleCloseAll}
         selectedDate={selectedDate}
         onComplete={handleReservationComplete}
-        onBack={handleFormBack}
+        onBack={handleUsageDetailsBack}
+        equipment={selectedEquipmentList}
         customEquipmentName={customEquipmentName}
         quantities={quantities}
+        applicantData={applicantData}
+        usagePeriodData={usagePeriodData}
+        initialData={usageDetailsData || undefined}
       />
 
       <style>{`

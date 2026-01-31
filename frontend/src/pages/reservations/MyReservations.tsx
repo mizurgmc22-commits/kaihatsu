@@ -5,12 +5,6 @@ import {
   HStack,
   Input,
   Button,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
   Badge,
   Text,
   Flex,
@@ -152,13 +146,13 @@ export default function MyReservations() {
           <VStack as="form" onSubmit={handleSearch} spacing={4} align="stretch">
             <Alert status="info" borderRadius="md">
               <AlertIcon />
-              予約時に入力した連絡先（メールアドレスまたは電話番号）を入力して検索してください。
+              予約時に入力した連絡先（内線/PHS）を入力して検索してください。
             </Alert>
             <HStack>
               <FormControl>
                 <FormLabel>連絡先</FormLabel>
                 <Input
-                  placeholder="例: example@hospital.jp または 090-1234-5678"
+                  placeholder="例: 1234 / 内線1234 / PHS 5678"
                   value={contactInfo}
                   onChange={(e) => setContactInfo(e.target.value)}
                 />
@@ -190,43 +184,70 @@ export default function MyReservations() {
               </Text>
             ) : (
               <>
-                <Table size="sm">
-                  <Thead>
-                    <Tr>
-                      <Th>予約ID</Th>
-                      <Th>機材</Th>
-                      <Th>期間</Th>
-                      <Th>数量</Th>
-                      <Th>状態</Th>
-                      <Th>操作</Th>
-                    </Tr>
-                  </Thead>
-                  <Tbody>
-                    {data?.items.map((r) => (
-                      <Tr key={r.id}>
-                        <Td>{r.id}</Td>
-                        <Td>
-                          <Text fontWeight="medium">
-                            {r.equipment?.name ||
-                              r.customEquipmentName ||
-                              "未設定"}
-                          </Text>
+                <VStack spacing={4} align="stretch">
+                  {data?.items.map((r) => (
+                    <Box
+                      key={r.id}
+                      p={4}
+                      bg="white"
+                      borderRadius="lg"
+                      border="1px"
+                      borderColor="gray.200"
+                      shadow="sm"
+                      _hover={{ shadow: "md", borderColor: "blue.200" }}
+                      transition="all 0.2s"
+                    >
+                      <Flex justify="space-between" align="flex-start" wrap="wrap" gap={3}>
+                        {/* 左側: 機材情報 */}
+                        <Box flex="1" minW="200px">
+                          <HStack spacing={2} mb={2}>
+                            {getStatusBadge(r.status)}
+                            <Text fontWeight="bold" fontSize="lg" color="gray.700">
+                              {r.equipment?.name ||
+                                r.customEquipmentName ||
+                                "未設定"}
+                            </Text>
+                          </HStack>
                           {r.equipment?.category?.name && (
-                            <Text fontSize="xs" color="gray.500">
-                              {r.equipment.category.name}
+                            <Text fontSize="sm" color="gray.500" mb={1}>
+                              カテゴリ: {r.equipment.category.name}
                             </Text>
                           )}
-                        </Td>
-                        <Td fontSize="xs">
-                          {formatDateTime(r.startTime)}
-                          <br />〜 {formatDateTime(r.endTime)}
-                        </Td>
-                        <Td>{r.quantity}</Td>
-                        <Td>{getStatusBadge(r.status)}</Td>
-                        <Td>
+                          <Text fontSize="sm" color="gray.600" mb={2}>
+                            部署: {r.department || "未設定"}
+                          </Text>
+                          <HStack spacing={4} fontSize="sm" color="gray.600">
+                            <HStack>
+                              <Text fontWeight="medium">数量:</Text>
+                              <Text>{r.quantity}</Text>
+                            </HStack>
+                          </HStack>
+                        </Box>
+
+                        {/* 中央: 期間 */}
+                        <Box
+                          bg="gray.50"
+                          p={3}
+                          borderRadius="md"
+                          minW="220px"
+                        >
+                          <Text fontSize="xs" color="gray.500" mb={1}>
+                            利用期間
+                          </Text>
+                          <Text fontSize="sm" fontWeight="medium" color="gray.700">
+                            {formatDateTime(r.startTime)}
+                          </Text>
+                          <Text fontSize="xs" color="gray.400">↓</Text>
+                          <Text fontSize="sm" fontWeight="medium" color="gray.700">
+                            {formatDateTime(r.endTime)}
+                          </Text>
+                        </Box>
+
+                        {/* 右側: 操作ボタン */}
+                        <Box alignSelf="center">
                           {canCancel(r) ? (
                             <Button
-                              size="xs"
+                              size="sm"
                               colorScheme="red"
                               variant="outline"
                               onClick={() => handleCancelClick(r)}
@@ -238,11 +259,11 @@ export default function MyReservations() {
                               -
                             </Text>
                           )}
-                        </Td>
-                      </Tr>
-                    ))}
-                  </Tbody>
-                </Table>
+                        </Box>
+                      </Flex>
+                    </Box>
+                  ))}
+                </VStack>
 
                 {/* ページネーション */}
                 {data && data.pagination.totalPages > 1 && (
