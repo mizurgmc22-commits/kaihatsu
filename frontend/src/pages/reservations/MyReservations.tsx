@@ -24,8 +24,10 @@ import {
   Alert,
   AlertIcon,
   Spinner,
+  Icon,
+  Divider,
 } from "@chakra-ui/react";
-import { FiClock } from "react-icons/fi";
+import { FiClock, FiPackage, FiCalendar, FiUsers, FiHash, FiX } from "react-icons/fi";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getMyReservations, cancelMyReservation } from "../../api/reservation";
 import type { Reservation } from "../../types/reservation";
@@ -96,19 +98,38 @@ export default function MyReservations() {
   };
 
   const getStatusBadge = (status: string) => {
+    const styles = {
+      pending: { bg: "orange.100", color: "orange.700", text: "承認待ち" },
+      approved: { bg: "green.100", color: "green.700", text: "承認済み" },
+      rejected: { bg: "red.100", color: "red.700", text: "却下" },
+      cancelled: { bg: "gray.100", color: "gray.600", text: "キャンセル" },
+      completed: { bg: "blue.100", color: "blue.700", text: "完了" },
+    };
+    const style = styles[status as keyof typeof styles] || { bg: "gray.100", color: "gray.600", text: status };
+    return (
+      <Badge
+        px={3}
+        py={1}
+        borderRadius="full"
+        bg={style.bg}
+        color={style.color}
+        fontWeight="semibold"
+        fontSize="xs"
+        textTransform="none"
+      >
+        {style.text}
+      </Badge>
+    );
+  };
+
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case "pending":
-        return <Badge colorScheme="yellow">承認待ち</Badge>;
-      case "approved":
-        return <Badge colorScheme="green">承認済み</Badge>;
-      case "rejected":
-        return <Badge colorScheme="red">却下</Badge>;
-      case "cancelled":
-        return <Badge colorScheme="gray">キャンセル</Badge>;
-      case "completed":
-        return <Badge colorScheme="blue">完了</Badge>;
-      default:
-        return <Badge>{status}</Badge>;
+      case "pending": return "orange.400";
+      case "approved": return "green.400";
+      case "rejected": return "red.400";
+      case "cancelled": return "gray.400";
+      case "completed": return "blue.400";
+      default: return "gray.400";
     }
   };
 
@@ -188,79 +209,102 @@ export default function MyReservations() {
                   {data?.items.map((r) => (
                     <Box
                       key={r.id}
-                      p={4}
                       bg="white"
-                      borderRadius="lg"
-                      border="1px"
-                      borderColor="gray.200"
-                      shadow="sm"
-                      _hover={{ shadow: "md", borderColor: "blue.200" }}
-                      transition="all 0.2s"
+                      borderRadius="xl"
+                      shadow="md"
+                      overflow="hidden"
+                      _hover={{ shadow: "lg", transform: "translateY(-2px)" }}
+                      transition="all 0.3s ease"
                     >
-                      <Flex justify="space-between" align="flex-start" wrap="wrap" gap={3}>
-                        {/* 左側: 機材情報 */}
-                        <Box flex="1" minW="200px">
-                          <HStack spacing={2} mb={2}>
-                            {getStatusBadge(r.status)}
-                            <Text fontWeight="bold" fontSize="lg" color="gray.700">
-                              {r.equipment?.name ||
-                                r.customEquipmentName ||
-                                "未設定"}
-                            </Text>
-                          </HStack>
-                          {r.equipment?.category?.name && (
-                            <Text fontSize="sm" color="gray.500" mb={1}>
-                              カテゴリ: {r.equipment.category.name}
-                            </Text>
-                          )}
-                          <Text fontSize="sm" color="gray.600" mb={2}>
-                            部署: {r.department || "未設定"}
-                          </Text>
-                          <HStack spacing={4} fontSize="sm" color="gray.600">
-                            <HStack>
-                              <Text fontWeight="medium">数量:</Text>
-                              <Text>{r.quantity}</Text>
+                      {/* カード上部: ステータスバー */}
+                      <Box
+                        h="4px"
+                        bgGradient={`linear(to-r, ${getStatusColor(r.status)}, ${getStatusColor(r.status)})`}
+                      />
+                      
+                      <Box p={5}>
+                        <Flex justify="space-between" align="flex-start" wrap="wrap" gap={4}>
+                          {/* 左側: メイン情報 */}
+                          <Box flex="1" minW="280px">
+                            {/* ヘッダー: ステータス + 機材名 */}
+                            <HStack spacing={3} mb={3}>
+                              {getStatusBadge(r.status)}
                             </HStack>
-                          </HStack>
-                        </Box>
+                            
+                            <HStack spacing={2} mb={3}>
+                              <Icon as={FiPackage} color="blue.500" boxSize={5} />
+                              <Text fontWeight="bold" fontSize="xl" color="gray.800">
+                                {r.equipment?.name ||
+                                  r.customEquipmentName ||
+                                  "未設定"}
+                              </Text>
+                            </HStack>
 
-                        {/* 中央: 期間 */}
-                        <Box
-                          bg="gray.50"
-                          p={3}
-                          borderRadius="md"
-                          minW="220px"
-                        >
-                          <Text fontSize="xs" color="gray.500" mb={1}>
-                            利用期間
-                          </Text>
-                          <Text fontSize="sm" fontWeight="medium" color="gray.700">
-                            {formatDateTime(r.startTime)}
-                          </Text>
-                          <Text fontSize="xs" color="gray.400">↓</Text>
-                          <Text fontSize="sm" fontWeight="medium" color="gray.700">
-                            {formatDateTime(r.endTime)}
-                          </Text>
-                        </Box>
+                            <Divider mb={3} />
+                            
+                            {/* 詳細情報 */}
+                            <VStack align="start" spacing={2}>
+                              {r.equipment?.category?.name && (
+                                <HStack fontSize="sm" color="gray.600">
+                                  <Icon as={FiPackage} boxSize={4} />
+                                  <Text>カテゴリ: {r.equipment.category.name}</Text>
+                                </HStack>
+                              )}
+                              <HStack fontSize="sm" color="gray.600">
+                                <Icon as={FiUsers} boxSize={4} />
+                                <Text>部署: {r.department || "未設定"}</Text>
+                              </HStack>
+                              <HStack fontSize="sm" color="gray.600">
+                                <Icon as={FiHash} boxSize={4} />
+                                <Text>数量: {r.quantity} 個</Text>
+                              </HStack>
+                            </VStack>
+                          </Box>
 
-                        {/* 右側: 操作ボタン */}
-                        <Box alignSelf="center">
-                          {canCancel(r) ? (
-                            <Button
-                              size="sm"
-                              colorScheme="red"
-                              variant="outline"
-                              onClick={() => handleCancelClick(r)}
+                          {/* 右側: 期間 + ボタン */}
+                          <VStack align="stretch" spacing={4}>
+                            {/* 期間ボックス */}
+                            <Box
+                              bg="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                              bgGradient="linear(135deg, blue.500, purple.500)"
+                              p={4}
+                              borderRadius="lg"
+                              minW="200px"
+                              color="white"
                             >
-                              キャンセル
-                            </Button>
-                          ) : (
-                            <Text fontSize="xs" color="gray.400">
-                              -
-                            </Text>
-                          )}
-                        </Box>
-                      </Flex>
+                              <HStack mb={2}>
+                                <Icon as={FiCalendar} boxSize={4} />
+                                <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" letterSpacing="wide">
+                                  利用期間
+                                </Text>
+                              </HStack>
+                              <VStack align="start" spacing={1}>
+                                <Text fontSize="sm" fontWeight="bold">
+                                  {formatDateTime(r.startTime)}
+                                </Text>
+                                <Text fontSize="xs" opacity={0.8}>〜</Text>
+                                <Text fontSize="sm" fontWeight="bold">
+                                  {formatDateTime(r.endTime)}
+                                </Text>
+                              </VStack>
+                            </Box>
+
+                            {/* キャンセルボタン */}
+                            {canCancel(r) && (
+                              <Button
+                                size="md"
+                                colorScheme="red"
+                                variant="outline"
+                                leftIcon={<FiX />}
+                                onClick={() => handleCancelClick(r)}
+                                _hover={{ bg: "red.50" }}
+                              >
+                                キャンセル
+                              </Button>
+                            )}
+                          </VStack>
+                        </Flex>
+                      </Box>
                     </Box>
                   ))}
                 </VStack>
