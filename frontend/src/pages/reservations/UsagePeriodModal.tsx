@@ -284,7 +284,7 @@ export default function UsagePeriodModal({
                       render={({ field }) => (
                         <DatePicker
                           selected={field.value ? parseStringToDate(field.value) : null}
-                          onChange={(date) => {
+                          onChange={(date: Date | null) => {
                             if (date) {
                               const adjustedDate = isWeekday(date) ? date : getNextWeekday(date);
                               field.onChange(formatDateToString(adjustedDate));
@@ -333,7 +333,7 @@ export default function UsagePeriodModal({
                       render={({ field }) => (
                         <DatePicker
                           selected={field.value ? parseStringToDate(field.value) : null}
-                          onChange={(date) => {
+                          onChange={(date: Date | null) => {
                             if (date) {
                               const adjustedDate = isWeekday(date) ? date : getNextWeekday(date);
                               field.onChange(formatDateToString(adjustedDate));
@@ -343,7 +343,7 @@ export default function UsagePeriodModal({
                           dayClassName={getDayClassName}
                           locale="ja"
                           dateFormat="yyyy/MM/dd (EEE)"
-                          minDate={startDateStr ? parseStringToDate(startDateStr) : new Date()}
+                          minDate={(startDateStr && parseStringToDate(startDateStr)) || new Date()}
                           customInput={<CustomDateInput />}
                           popperPlacement="bottom-start"
                           showPopperArrow={false}
