@@ -20,6 +20,7 @@ backend/database.sqlite
 
 # OS
 .DS_Store
+._*
 Thumbs.db
 
 # Logs
