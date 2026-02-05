@@ -5,14 +5,13 @@ import {
   getDoc,
   addDoc,
   updateDoc,
-  deleteDoc,
   doc,
   query,
   where,
   serverTimestamp,
-  Timestamp,
   orderBy,
-  limit as firestoreLimit,
+  QueryDocumentSnapshot,
+  DocumentData,
 } from "firebase/firestore";
 import type {
   Reservation,
@@ -20,7 +19,7 @@ import type {
   AvailableEquipment,
   CalendarData,
 } from "../types/reservation";
-import type { Pagination } from "../types/equipment";
+import type { Pagination, Equipment } from "../types/equipment";
 import { ReservationStatus } from "../types/reservation";
 
 export interface ReservationQueryParams {
@@ -38,8 +37,11 @@ export interface ReservationListResponse {
 }
 
 // ヘルパー: FirestoreドキュメントをReservation型に変換
-const mapDocToReservation = (doc: any): Reservation => {
+const mapDocToReservation = (doc: QueryDocumentSnapshot<DocumentData> | import("firebase/firestore").DocumentSnapshot<DocumentData>): Reservation => {
   const data = doc.data();
+  if (!data) {
+    throw new Error("Document data is undefined");
+  }
   return {
     id: doc.id,
     ...data,
@@ -64,6 +66,9 @@ export const getReservations = async (
   if (params?.status) {
     q = query(q, where("status", "==", params.status));
   }
+
+  // Note: 複合インデックスが必要になる可能性があるため、日付フィルタはクライアント側で実施
+  // Firestoreの制約上、等価フィルタと範囲フィルタの組み合わせには注意が必要
 
   const querySnapshot = await getDocs(q);
   let items = querySnapshot.docs.map(mapDocToReservation);
@@ -104,71 +109,96 @@ export const getAvailableEquipment = async (
   date: string,
   categoryId?: string,
 ): Promise<AvailableEquipment[]> => {
-  // 簡易実装: 全ての機器を取得し、その日の予約をチェック
-  const equipmentRef = collection(db, "equipments");
-  let eqQuery = query(
-    equipmentRef,
-    where("isDeleted", "==", false),
-    where("isActive", "==", true),
-  );
-  if (categoryId) {
-    eqQuery = query(eqQuery, where("categoryId", "==", categoryId));
-  }
+  // 並行してデータ取得を行いパフォーマンスを向上
+  const equipmentPromise = (async () => {
+    const equipmentRef = collection(db, "equipments");
+    let eqQuery = query(
+      equipmentRef,
+      where("isDeleted", "==", false),
+      where("isActive", "==", true),
+    );
+    if (categoryId) {
+      eqQuery = query(eqQuery, where("categoryId", "==", categoryId));
+    }
+    const snap = await getDocs(eqQuery);
+    // any型を排除し、Equipment型として扱う（ただしFirestoreのデータは保証されないためキャストは必要）
+    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Equipment);
+  })();
 
-  const eqSnap = await getDocs(eqQuery);
-  const equipments = eqSnap.docs.map(
-    (doc) => ({ id: doc.id, ...doc.data() }) as any,
-  );
+  const categoriesPromise = (async () => {
+    const categoryRef = collection(db, "categories");
+    const snap = await getDocs(categoryRef);
+    return new Map(
+      snap.docs.map((doc) => {
+        const d = doc.data();
+        return [
+          doc.id,
+          {
+            id: doc.id,
+            name: d.name as string,
+            description: d.description as string,
+            createdAt: d.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+            updatedAt: d.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          },
+        ];
+      }),
+    );
+  })();
 
-  // カテゴリ情報を取得してマッピング
-  const categoryRef = collection(db, "categories");
-  const categorySnap = await getDocs(categoryRef);
-  const categoryMap = new Map(
-    categorySnap.docs.map((doc) => [
-      doc.id,
-      {
-        id: doc.id,
-        name: doc.data().name,
-        description: doc.data().description,
-      },
-    ]),
-  );
+  const reservationsPromise = (async () => {
+    const resRef = collection(db, "reservations");
+    // statusでのフィルタリングのみFirestoreで行う
+    // 日付範囲フィルタは複合インデックスが必要なため、現状はクライアント側で実施
+    // 将来的には where("endTime", ">=", startOfDay) などを検討すべき
+    const snap = await getDocs(
+      query(
+        resRef,
+        where("status", "in", [
+          ReservationStatus.APPROVED,
+          ReservationStatus.PENDING,
+        ]),
+      ),
+    );
+    return snap.docs.map((doc) => doc.data() as Reservation);
+  })();
+
+  const [equipments, categoryMap, allReservations] = await Promise.all([
+    equipmentPromise,
+    categoriesPromise,
+    reservationsPromise,
+  ]);
 
   const targetDate = new Date(date);
   const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0)).toISOString();
   const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999)).toISOString();
 
-  const resRef = collection(db, "reservations");
-  const resSnap = await getDocs(
-    query(
-      resRef,
-      where("status", "in", [
-        ReservationStatus.APPROVED,
-        ReservationStatus.PENDING,
-      ]),
-    ),
+  // 対象日の予約のみをメモリ上でフィルタリング
+  const todaysReservations = allReservations.filter(
+    (r) => r.startTime <= endOfDay && r.endTime >= startOfDay
   );
-  const reservations = resSnap.docs.map((doc) => doc.data());
 
   return equipments.map((eq) => {
-    const used = reservations
-      .filter(
-        (r) =>
-          r.equipmentId === eq.id &&
-          r.startTime <= endOfDay &&
-          r.endTime >= startOfDay,
-      )
+    const used = todaysReservations
+      .filter((r) => r.equipmentId === eq.id)
       .reduce((sum, r) => sum + (r.quantity || 0), 0);
 
     // カテゴリ情報を付与
-    const category = eq.categoryId ? categoryMap.get(eq.categoryId) : undefined;
+    // Equipment型にはcategoryIdがあるはずだが、型定義によってはcategoryオブジェクトの場合もある
+    // ここでは安全に map から取得したオブジェクトを使用する
+    // データ構造の不整合（categoryIdフィールド vs categoryオブジェクト）を吸収
+    const resolvedCategory = eq.category?.id && categoryMap.has(eq.category.id)
+      ? categoryMap.get(eq.category.id)
+      : (eq as any).categoryId && categoryMap.has((eq as any).categoryId)
+        ? categoryMap.get((eq as any).categoryId)
+        : undefined;
+
 
     return {
       ...eq,
-      category,
+      category: resolvedCategory,
       remainingQuantity: eq.quantity - used,
-      isAvailable: eq.quantity - used > 0 || eq.isUnlimited,
-      isUnlimited: eq.isUnlimited || false,
+      isAvailable: eq.quantity - used > 0 || !!(eq as any).isUnlimited, // isUnlimitedの型定義がない場合への対処
+      isUnlimited: !!(eq as any).isUnlimited,
     };
   });
 };
@@ -182,7 +212,7 @@ export const getEquipmentCalendar = async (
   const docRef = doc(db, "equipments", equipmentId);
   const docSnap = await getDoc(docRef);
   if (!docSnap.exists()) throw new Error("Equipment not found");
-  const equipment = docSnap.data();
+  const equipment = docSnap.data() as Equipment;
 
   const startOfMonth = new Date(year, month - 1, 1).toISOString();
   const endOfMonth = new Date(year, month, 0, 23, 59, 59).toISOString();
@@ -300,7 +330,7 @@ export const createReservation = async (
   };
 
   const docRef = await addDoc(collection(db, "reservations"), reservationData);
-  return { id: docRef.id, ...reservationData } as any;
+  return { id: docRef.id, ...reservationData } as unknown as Reservation;
 };
 
 // 予約更新
@@ -327,7 +357,6 @@ export const cancelReservation = async (id: string): Promise<void> => {
 };
 
 // ========== CSVエクスポート ==========
-// 注意: Client-sideでCSV生成するように変更するか、一旦URL生成を無効化
 export const getExportUrl = (params?: any): string => {
   return "#"; // 一旦無効化
 };
@@ -355,14 +384,17 @@ export const getMyReservations = async (
   const now = new Date().toISOString();
   let items = querySnapshot.docs
     .map(mapDocToReservation)
-    // 借用期間（返却日）が過ぎたものを除外
+    // 借用期間（返却日）が過ぎたものを除外（要件次第だが現状のロジックを維持）
     .filter((item) => item.endTime >= now)
     .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
   // 機材情報を取得して紐づける
   const eqSnap = await getDocs(collection(db, "equipments"));
   const eqMap = new Map(
-    eqSnap.docs.map((doc) => [doc.id, { id: doc.id, name: doc.data().name, categoryId: doc.data().categoryId }])
+    eqSnap.docs.map((doc) => {
+      const d = doc.data();
+      return [doc.id, { id: doc.id, name: d.name, categoryId: d.categoryId }];
+    })
   );
 
   // カテゴリ情報を取得

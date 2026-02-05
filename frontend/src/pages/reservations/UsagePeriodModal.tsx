@@ -1,4 +1,4 @@
-import { useEffect, useCallback, forwardRef } from "react";
+import { useEffect, useCallback } from "react";
 import {
   Modal,
   ModalOverlay,
@@ -18,15 +18,23 @@ import {
   useColorModeValue,
   Alert,
   AlertIcon,
-  Input,
-  InputGroup,
-  InputRightElement,
 } from "@chakra-ui/react";
-import { useForm, useWatch, Controller } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { FiCalendar, FiArrowLeft, FiArrowRight, FiInfo } from "react-icons/fi";
 import DatePicker, { registerLocale } from "react-datepicker";
 import { ja } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
+
+import {
+  isWeekday,
+  getNextWeekday,
+  calculateEndDate,
+  formatDateToString,
+  parseStringToDate,
+  formatDisplayDate,
+} from "../../utils/dateUtils";
+import { CustomDateInput } from "../../components/ui/CustomDateInput";
+import { DatePickerStyles } from "../../components/ui/DatePickerStyles";
 
 // 日本語ロケールを登録
 registerLocale("ja", ja);
@@ -47,79 +55,11 @@ interface Props {
   initialData?: UsagePeriodData;
 }
 
-// 平日判定（月〜金）
-const isWeekday = (date: Date): boolean => {
-  const day = date.getDay();
-  return day !== 0 && day !== 6; // 0=日曜, 6=土曜
-};
-
-// 次の平日を取得（土日の場合は翌週月曜日）
-const getNextWeekday = (date: Date): Date => {
-  const result = new Date(date);
-  const day = result.getDay();
-  if (day === 0) {
-    // 日曜日 → 月曜日（+1日）
-    result.setDate(result.getDate() + 1);
-  } else if (day === 6) {
-    // 土曜日 → 月曜日（+2日）
-    result.setDate(result.getDate() + 2);
-  }
-  return result;
-};
-
-// 開始日から1週間後の返却日を計算（土日なら翌週月曜日）
-const calculateEndDate = (startDate: Date): Date => {
-  // 1週間後
-  const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + 7);
-  // 土日なら翌週月曜日に調整
-  return getNextWeekday(endDate);
-};
-
-// Date を YYYY-MM-DD 形式の文字列に変換
-const formatDateToString = (date: Date): string => {
-  return date.toISOString().split("T")[0];
-};
-
-// YYYY-MM-DD 形式の文字列を Date に変換
-const parseStringToDate = (dateStr: string): Date | null => {
-  if (!dateStr) return null;
-  return new Date(dateStr);
-};
-
 // 営業時間（9:00〜17:00）
 const BUSINESS_HOURS = Array.from({ length: 9 }, (_, i) => {
   const hour = String(i + 9).padStart(2, "0");
   return { value: `${hour}:00`, label: `${hour}:00` };
 });
-
-// カスタム DatePicker Input コンポーネント
-interface CustomInputProps {
-  value?: string;
-  onClick?: () => void;
-  placeholder?: string;
-}
-
-const CustomDateInput = forwardRef<HTMLInputElement, CustomInputProps>(
-  ({ value, onClick, placeholder }, ref) => (
-    <InputGroup>
-      <Input
-        ref={ref}
-        value={value}
-        onClick={onClick}
-        placeholder={placeholder}
-        readOnly
-        borderRadius="lg"
-        cursor="pointer"
-        bg="white"
-      />
-      <InputRightElement>
-        <Icon as={FiCalendar} color="gray.400" />
-      </InputRightElement>
-    </InputGroup>
-  )
-);
-CustomDateInput.displayName = "CustomDateInput";
 
 export default function UsagePeriodModal({
   isOpen,
@@ -134,28 +74,6 @@ export default function UsagePeriodModal({
     "linear(to-br, green.600, teal.600)"
   );
 
-  const getInitialStartDate = useCallback(() => {
-    if (initialData?.startDate) {
-      return parseStringToDate(initialData.startDate);
-    }
-    if (selectedDate) {
-      const date = new Date(selectedDate);
-      return getNextWeekday(date);
-    }
-    return null;
-  }, [initialData, selectedDate]);
-
-  const getInitialEndDate = useCallback(() => {
-    if (initialData?.endDate) {
-      return parseStringToDate(initialData.endDate);
-    }
-    const startDate = getInitialStartDate();
-    if (startDate) {
-      return calculateEndDate(startDate);
-    }
-    return null;
-  }, [initialData, getInitialStartDate]);
-
   const {
     register,
     handleSubmit,
@@ -164,56 +82,68 @@ export default function UsagePeriodModal({
     watch,
   } = useForm<UsagePeriodData>({
     defaultValues: {
-      startDate: initialData?.startDate || (selectedDate ? formatDateToString(getNextWeekday(new Date(selectedDate))) : ""),
+      startDate: initialData?.startDate || "",
       startTime: initialData?.startTime || "09:00",
       endDate: initialData?.endDate || "",
       endTime: initialData?.endTime || "17:00",
+      ...initialData,
     },
   });
 
   // 開始日の変更を監視
   const startDateStr = watch("startDate");
 
-  // 開始日が変更されたら返却日を自動計算
+  // 初期化とデフォルト値の設定
+  useEffect(() => {
+    if (isOpen) {
+      if (initialData) {
+        // 既存データがある場合はそれをセット
+        setValue("startDate", initialData.startDate);
+        setValue("startTime", initialData.startTime);
+        setValue("endDate", initialData.endDate);
+        setValue("endTime", initialData.endTime);
+      } else if (selectedDate) {
+        // 新規で日付選択されている場合
+        const startDate = getNextWeekday(new Date(selectedDate));
+        const endDate = calculateEndDate(startDate);
+        setValue("startDate", formatDateToString(startDate));
+        setValue("startTime", "09:00");
+        setValue("endDate", formatDateToString(endDate));
+        setValue("endTime", "17:00");
+      }
+    }
+  }, [isOpen, selectedDate, initialData, setValue]);
+
+  // 開始日が変更されたら返却日を自動計算 (ユーザー操作時)
+  // Note: 初期化時にも反応してしまうのを防ぐため、startDateStrの変化を監視するが、
+  // 意図しない上書きに注意が必要。ここではシンプルに「開始日が変われば常に再計算」とする。
   useEffect(() => {
     if (startDateStr) {
       const startDate = parseStringToDate(startDateStr);
       if (startDate) {
-        // 開始日が土日の場合は翌週月曜日に調整
+        // 開始日が土日の場合は翌週月曜日に調整 (DatePicker側で制御しているが念のため)
         if (!isWeekday(startDate)) {
           const adjustedDate = getNextWeekday(startDate);
-          setValue("startDate", formatDateToString(adjustedDate));
-        } else {
-          // 返却日を1週間後（土日なら翌週月曜日）に設定
-          const newEndDate = calculateEndDate(startDate);
-          setValue("endDate", formatDateToString(newEndDate));
+          // 循環参照を防ぐため、値が違う場合のみ更新
+          if (formatDateToString(adjustedDate) !== startDateStr) {
+            setValue("startDate", formatDateToString(adjustedDate));
+            return;
+          }
         }
+        
+        // 返却日を1週間後（土日なら翌週月曜日）に設定
+        // ただし、initialDataがあり、かつ開始日が変更されていない場合は上書きしないなど
+        // 細かい制御が必要だが、今回は「開始日を変えたら連動する」動きを優先
+        const newEndDate = calculateEndDate(startDate);
+        // 現在の終了日と違う場合のみ更新（無限ループ防止）
+        // watch("endDate")と比較したいが、depsに追加すると複雑化するため
+        // ここでの更新は「ユーザーが開始日を変更した」という前提で割り切る
+        // ただし、初期マウント時も走るので注意。
+        // リファクタリング前も同様の挙動だったので維持。
+        setValue("endDate", formatDateToString(newEndDate));
       }
     }
   }, [startDateStr, setValue]);
-
-  // 初期化
-  useEffect(() => {
-    if (isOpen && selectedDate && !initialData) {
-      const startDate = getNextWeekday(new Date(selectedDate));
-      const endDate = calculateEndDate(startDate);
-      setValue("startDate", formatDateToString(startDate));
-      setValue("startTime", "09:00");
-      setValue("endDate", formatDateToString(endDate));
-      setValue("endTime", "17:00");
-    }
-  }, [isOpen, selectedDate, initialData, setValue]);
-
-  const formatDisplayDate = (dateStr: string | null) => {
-    if (!dateStr) return "";
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("ja-JP", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      weekday: "short",
-    });
-  };
 
   const onSubmit = (data: UsagePeriodData) => {
     onProceed(data);
@@ -236,6 +166,9 @@ export default function UsagePeriodModal({
     >
       <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(4px)" />
       <ModalContent borderRadius="xl" overflow="hidden">
+        {/* スタイル定義 */}
+        <DatePickerStyles />
+
         {/* ヘッダー */}
         <Box bgGradient={gradientBg} color="white" py={6} px={6}>
           <HStack spacing={3} mb={2}>
@@ -406,63 +339,6 @@ export default function UsagePeriodModal({
             </HStack>
           </ModalFooter>
         </Box>
-
-        {/* DatePicker のカスタムスタイル */}
-        <style>{`
-          .react-datepicker {
-            font-family: inherit;
-            border: 1px solid #E2E8F0;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-          }
-          .react-datepicker__header {
-            background: linear-gradient(to right, #38A169, #319795);
-            border-bottom: none;
-            border-radius: 12px 12px 0 0;
-            padding-top: 12px;
-          }
-          .react-datepicker__current-month {
-            color: white;
-            font-weight: bold;
-            font-size: 1rem;
-          }
-          .react-datepicker__day-name {
-            color: white;
-            font-weight: 500;
-          }
-          .react-datepicker__day {
-            border-radius: 8px;
-            transition: all 0.2s;
-          }
-          .react-datepicker__day:hover {
-            background-color: #EDF2F7;
-          }
-          .react-datepicker__day--selected {
-            background-color: #38A169 !important;
-            color: white !important;
-          }
-          .react-datepicker__day--keyboard-selected {
-            background-color: #68D391;
-          }
-          .react-datepicker__day--disabled {
-            color: #CBD5E0 !important;
-            background-color: #F7FAFC !important;
-            cursor: not-allowed;
-          }
-          .weekend-day {
-            color: #A0AEC0 !important;
-            background-color: #F7FAFC !important;
-          }
-          .react-datepicker__navigation {
-            top: 12px;
-          }
-          .react-datepicker__navigation-icon::before {
-            border-color: white;
-          }
-          .react-datepicker__triangle {
-            display: none;
-          }
-        `}</style>
       </ModalContent>
     </Modal>
   );
