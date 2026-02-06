@@ -1,3 +1,4 @@
+import { Link as RouterLink } from "react-router-dom";
 import {
   Box,
   SimpleGrid,
@@ -149,7 +150,18 @@ export default function TopPageRenderer({
           </Heading>
         </HStack>
 
-        <Flex align="center" gap={2}>
+        <Flex align="center" gap={3}>
+          <Button
+            as={RouterLink}
+            to="/calendar"
+            colorScheme="orange"
+            leftIcon={<FiCalendar />}
+            shadow="md"
+            size="md"
+            mr={2}
+          >
+            新規予約
+          </Button>
           <HStack
             spacing={2}
             bg="white"
