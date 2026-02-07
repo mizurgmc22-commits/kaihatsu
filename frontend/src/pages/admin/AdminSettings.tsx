@@ -348,6 +348,47 @@ export default function AdminSettings() {
             </CardBody>
           </Card>
         </Collapse>
+
+        {/* 画像URLクリーンアップ */}
+        <Card>
+          <CardBody>
+            <Heading size="md" mb={2}>
+              画像URLクリーンアップ
+            </Heading>
+            <Text fontSize="sm" color="gray.600" mb={4}>
+              ローカルパス形式の画像URLをクリアします。Google Drive
+              URLは影響を受けません。
+            </Text>
+            <Button
+              colorScheme="orange"
+              onClick={async () => {
+                try {
+                  const { clearLocalImageUrls } =
+                    await import("../../api/equipment");
+                  const result = await clearLocalImageUrls();
+                  toast({
+                    title: "クリーンアップ完了",
+                    description: `${result.updated}件の画像URLをクリアしました（スキップ: ${result.skipped}件）`,
+                    status: "success",
+                    duration: 5000,
+                    isClosable: true,
+                  });
+                  queryClient.invalidateQueries({ queryKey: ["equipment"] });
+                } catch (error: any) {
+                  toast({
+                    title: "クリーンアップに失敗しました",
+                    description: error.message,
+                    status: "error",
+                    duration: 5000,
+                    isClosable: true,
+                  });
+                }
+              }}
+            >
+              ローカル画像URLをクリア
+            </Button>
+          </CardBody>
+        </Card>
       </Stack>
     </Box>
   );

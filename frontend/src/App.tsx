@@ -7,6 +7,7 @@ import Login from "./pages/auth/Login";
 import UserDashboard from "./pages/user/UserDashboard";
 import ReservationCalendar from "./pages/reservations/ReservationCalendar";
 import EquipmentListView from "./pages/reservations/EquipmentListView";
+import EquipmentSelectionPage from "./pages/reservations/EquipmentSelectionPage";
 import MyReservations from "./pages/reservations/MyReservations";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminDashboardContent from "./pages/admin/AdminDashboardContent";
@@ -28,6 +29,7 @@ function App() {
           <Route index element={<UserDashboard />} />
           <Route path="calendar" element={<ReservationCalendar />} />
           <Route path="equipment" element={<EquipmentListView />} />
+          <Route path="reserve" element={<EquipmentSelectionPage />} />
           <Route path="history" element={<MyReservations />} />
         </Route>
 

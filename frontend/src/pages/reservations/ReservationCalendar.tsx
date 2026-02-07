@@ -1,10 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import {
-  Box,
-  HStack,
-  Badge,
-  useDisclosure,
-} from "@chakra-ui/react";
+import { Box, HStack, Badge, useDisclosure } from "@chakra-ui/react";
 import { FiCalendar } from "react-icons/fi";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -17,9 +12,13 @@ import {
   getCalendarEvents,
 } from "../../api/reservation";
 import type { AvailableEquipment } from "../../types/reservation";
+import type { Equipment } from "../../types/equipment";
 import CategorySelectionModal from "./CategorySelectionModal";
 import AvailableEquipmentModal from "./AvailableEquipmentModal";
 import EquipmentConfirmModal from "./EquipmentConfirmModal";
+import DepartmentSelectModal, {
+  type DepartmentData,
+} from "./DepartmentSelectModal";
 import ApplicantInfoModal, { type ApplicantData } from "./ApplicantInfoModal";
 import UsagePeriodModal, { type UsagePeriodData } from "./UsagePeriodModal";
 import UsageDetailsModal, { type UsageDetailsData } from "./UsageDetailsModal";
@@ -32,7 +31,7 @@ export default function ReservationCalendar() {
     AvailableEquipment[]
   >([]);
   const [customEquipmentName, setCustomEquipmentName] = useState<string | null>(
-    null
+    null,
   );
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [dateRange, setDateRange] = useState<{
@@ -41,9 +40,16 @@ export default function ReservationCalendar() {
   } | null>(null);
 
   // フォームデータを管理
-  const [applicantData, setApplicantData] = useState<ApplicantData | null>(null);
-  const [usagePeriodData, setUsagePeriodData] = useState<UsagePeriodData | null>(null);
-  const [usageDetailsData, setUsageDetailsData] = useState<UsageDetailsData | null>(null);
+  const [departmentData, setDepartmentData] = useState<DepartmentData | null>(
+    null,
+  );
+  const [applicantData, setApplicantData] = useState<ApplicantData | null>(
+    null,
+  );
+  const [usagePeriodData, setUsagePeriodData] =
+    useState<UsagePeriodData | null>(null);
+  const [usageDetailsData, setUsageDetailsData] =
+    useState<UsageDetailsData | null>(null);
 
   const calendarRef = useRef<FullCalendar>(null);
   const queryClient = useQueryClient();
@@ -69,7 +75,14 @@ export default function ReservationCalendar() {
     onClose: onConfirmModalClose,
   } = useDisclosure();
 
-  // Step 4: 申請者情報モーダル
+  // Step 4: 部署選択モーダル
+  const {
+    isOpen: isDepartmentModalOpen,
+    onOpen: onDepartmentModalOpen,
+    onClose: onDepartmentModalClose,
+  } = useDisclosure();
+
+  // Step 5: 申請者情報モーダル
   const {
     isOpen: isApplicantModalOpen,
     onOpen: onApplicantModalOpen,
@@ -115,7 +128,7 @@ export default function ReservationCalendar() {
     (dateInfo: { startStr: string; endStr: string }) => {
       setDateRange({ start: dateInfo.startStr, end: dateInfo.endStr });
     },
-    []
+    [],
   );
 
   // 日付クリック時 → Step 1: カテゴリ選択モーダルを開く
@@ -139,14 +152,29 @@ export default function ReservationCalendar() {
       setUsageDetailsData(null);
       onCategoryModalOpen();
     },
-    [onCategoryModalOpen]
+    [onCategoryModalOpen],
   );
 
-  // Step 1 → Step 2: カテゴリ選択後、機器選択モーダルへ
+  // Step 1 → Step 2: カテゴリ選択後、機器選択モーダルへ（後方互換用）
   const handleCategoryProceed = (categoryIds: string[]) => {
     setSelectedCategoryIds(categoryIds);
     onCategoryModalClose();
     onEquipmentModalOpen();
+  };
+
+  // Step 1 → Step 3: 機器を直接選択した場合、確認モーダルへスキップ
+  const handleDirectEquipmentSelected = (equipment: Equipment[]) => {
+    // Equipment を AvailableEquipment に変換
+    const availableEquipmentList: AvailableEquipment[] = equipment.map((e) => ({
+      ...e,
+      remainingQuantity: e.quantity,
+      isAvailable: true,
+      isUnlimited: false,
+    }));
+    setCustomEquipmentName(null);
+    setSelectedEquipmentList(availableEquipmentList);
+    onCategoryModalClose();
+    onConfirmModalOpen();
   };
 
   // Step 2 → Step 3: 機器選択後、機器確認モーダルへ
@@ -179,33 +207,46 @@ export default function ReservationCalendar() {
     onCategoryModalOpen();
   };
 
-  // Step 3 → Step 2: 戻る
+  // Step 3 → Step 1: 戻る（機材選択モーダルへ）
   const handleConfirmBack = () => {
     onConfirmModalClose();
-    onEquipmentModalOpen();
+    onCategoryModalOpen();
   };
 
-  // Step 3 → Step 4: 機器確認後、申請者情報モーダルへ
+  // Step 3 → Step 4: 機器確認後、部署選択モーダルへ
   const handleConfirmProceed = (newQuantities: Record<string, number>) => {
     setQuantities(newQuantities);
     onConfirmModalClose();
-    onApplicantModalOpen();
+    onDepartmentModalOpen();
   };
 
-  // Step 4 → Step 3: 戻る
-  const handleApplicantBack = () => {
-    onApplicantModalClose();
+  // Step 4 → Step 3: 部署選択から戻る
+  const handleDepartmentBack = () => {
+    onDepartmentModalClose();
     onConfirmModalOpen();
   };
 
-  // Step 4 → Step 5: 申請者情報入力後、利用期間モーダルへ
+  // Step 4 → Step 5: 部署選択後、申請者情報モーダルへ
+  const handleDepartmentProceed = (data: DepartmentData) => {
+    setDepartmentData(data);
+    onDepartmentModalClose();
+    onApplicantModalOpen();
+  };
+
+  // Step 5 → Step 4: 申請者情報から部署選択へ戻る
+  const handleApplicantBack = () => {
+    onApplicantModalClose();
+    onDepartmentModalOpen();
+  };
+
+  // Step 5 → Step 6: 申請者情報入力後、利用期間モーダルへ
   const handleApplicantProceed = (data: ApplicantData) => {
     setApplicantData(data);
     onApplicantModalClose();
     onUsagePeriodModalOpen();
   };
 
-  // Step 5 → Step 4: 戻る
+  // Step 6 → Step 5: 戻る
   const handleUsagePeriodBack = () => {
     onUsagePeriodModalClose();
     onApplicantModalOpen();
@@ -229,12 +270,14 @@ export default function ReservationCalendar() {
     onCategoryModalClose();
     onEquipmentModalClose();
     onConfirmModalClose();
+    onDepartmentModalClose();
     onApplicantModalClose();
     onUsagePeriodModalClose();
     onUsageDetailsModalClose();
     setSelectedEquipmentList([]);
     setCustomEquipmentName(null);
     setQuantities({});
+    setDepartmentData(null);
     setApplicantData(null);
     setUsagePeriodData(null);
     setUsageDetailsData(null);
@@ -317,7 +360,7 @@ export default function ReservationCalendar() {
         />
       </Box>
 
-      {/* Step 1: カテゴリ選択モーダル */}
+      {/* Step 1: 機材選択モーダル（アコーディオン形式） */}
       <CategorySelectionModal
         isOpen={isCategoryModalOpen}
         onClose={onCategoryModalClose}
@@ -325,6 +368,7 @@ export default function ReservationCalendar() {
         categories={categories || []}
         onProceed={handleCategoryProceed}
         onCustomReserve={handleCustomReserveFromCategory}
+        onEquipmentSelected={handleDirectEquipmentSelected}
       />
 
       {/* Step 2: 機器選択モーダル */}
@@ -353,17 +397,35 @@ export default function ReservationCalendar() {
         onCustomEquipmentNameChange={handleCustomEquipmentNameChange}
       />
 
-      {/* Step 4: 申請者情報モーダル */}
+      {/* Step 4: 部署選択モーダル */}
+      <DepartmentSelectModal
+        isOpen={isDepartmentModalOpen}
+        onClose={handleCloseAll}
+        selectedDate={selectedDate}
+        onProceed={handleDepartmentProceed}
+        onBack={handleDepartmentBack}
+        initialData={departmentData || undefined}
+      />
+
+      {/* Step 5: 申請者情報モーダル */}
       <ApplicantInfoModal
         isOpen={isApplicantModalOpen}
         onClose={handleCloseAll}
         selectedDate={selectedDate}
+        department={departmentData?.department || ""}
         onProceed={handleApplicantProceed}
         onBack={handleApplicantBack}
-        initialData={applicantData || undefined}
+        initialData={
+          applicantData
+            ? {
+                applicantName: applicantData.applicantName,
+                contactInfo: applicantData.contactInfo,
+              }
+            : undefined
+        }
       />
 
-      {/* Step 5: 利用期間モーダル */}
+      {/* Step 6: 利用期間モーダル */}
       <UsagePeriodModal
         isOpen={isUsagePeriodModalOpen}
         onClose={handleCloseAll}
@@ -373,7 +435,7 @@ export default function ReservationCalendar() {
         initialData={usagePeriodData || undefined}
       />
 
-      {/* Step 6: 利用詳細モーダル */}
+      {/* Step 7: 利用詳細モーダル */}
       <UsageDetailsModal
         isOpen={isUsageDetailsModalOpen}
         onClose={handleCloseAll}

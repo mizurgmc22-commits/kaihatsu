@@ -304,3 +304,36 @@ export const deleteCategory = async (id: string): Promise<void> => {
   const docRef = doc(db, "categories", id);
   await deleteDoc(docRef);
 };
+
+// ========== ユーティリティ ==========
+
+// ローカルパス形式のimageUrlをクリアする
+export const clearLocalImageUrls = async (): Promise<{ updated: number; skipped: number }> => {
+  const equipmentRef = collection(db, "equipments");
+  const snapshot = await getDocs(equipmentRef);
+  
+  let updated = 0;
+  let skipped = 0;
+  
+  for (const docSnapshot of snapshot.docs) {
+    const data = docSnapshot.data();
+    const imageUrl = data.imageUrl;
+    
+    // ローカルパス形式かどうかをチェック
+    if (imageUrl && (
+      imageUrl.startsWith("/api/uploads/") || 
+      imageUrl.includes("localhost") ||
+      imageUrl.startsWith("uploads/")
+    )) {
+      await updateDoc(doc(db, "equipments", docSnapshot.id), {
+        imageUrl: "",
+        updatedAt: serverTimestamp(),
+      });
+      updated++;
+    } else {
+      skipped++;
+    }
+  }
+  
+  return { updated, skipped };
+};

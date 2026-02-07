@@ -1,13 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Modal,
   ModalOverlay,
   ModalContent,
-  ModalHeader,
+  ModalCloseButton,
   ModalBody,
   ModalFooter,
-  ModalCloseButton,
-  SimpleGrid,
   Box,
   Text,
   Button,
@@ -19,6 +17,15 @@ import {
   Input,
   Divider,
   useColorModeValue,
+  Accordion,
+  AccordionItem,
+  AccordionButton,
+  AccordionPanel,
+  AccordionIcon,
+  SimpleGrid,
+  Image,
+  Spinner,
+  Checkbox,
 } from "@chakra-ui/react";
 import {
   FiCheck,
@@ -26,8 +33,12 @@ import {
   FiArrowRight,
   FiGrid,
   FiEdit3,
+  FiShoppingCart,
 } from "react-icons/fi";
-import type { EquipmentCategory } from "../../types/equipment";
+import { useQuery } from "@tanstack/react-query";
+import type { EquipmentCategory, Equipment } from "../../types/equipment";
+import { getEquipmentList } from "../../api/equipment";
+import { resolveEquipmentImage } from "../../constants/equipmentImageOverrides";
 import { CATEGORY_SORT_ORDER } from "../../constants/category";
 
 interface Props {
@@ -38,6 +49,8 @@ interface Props {
   isLoading?: boolean;
   onProceed: (selectedCategoryIds: string[]) => void;
   onCustomReserve: (name: string) => void;
+  // 新しいコールバック：機器を直接選択した場合
+  onEquipmentSelected?: (equipment: Equipment[]) => void;
 }
 
 export default function CategorySelectionModal({
@@ -48,8 +61,11 @@ export default function CategorySelectionModal({
   isLoading,
   onProceed,
   onCustomReserve,
+  onEquipmentSelected,
 }: Props) {
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [customEquipmentName, setCustomEquipmentName] = useState("");
 
   // カラー設定
@@ -62,6 +78,22 @@ export default function CategorySelectionModal({
     "linear(to-br, blue.500, purple.500)",
     "linear(to-br, blue.600, purple.600)",
   );
+  const floatingBg = useColorModeValue("white", "gray.800");
+
+  // 機材一覧取得
+  const { data: equipmentData, isLoading: isLoadingEquipment } = useQuery({
+    queryKey: ["equipment", { isActive: true }],
+    queryFn: () => getEquipmentList({ isActive: true }),
+    enabled: isOpen,
+  });
+
+  // モーダルが開くたびに選択状態をリセット
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedEquipmentIds(new Set());
+      setCustomEquipmentName("");
+    }
+  }, [isOpen]);
 
   // 日付フォーマット
   const formatDate = (dateStr: string | null) => {
@@ -87,9 +119,22 @@ export default function CategorySelectionModal({
     });
   }, [categories]);
 
-  // カテゴリ選択/解除
-  const toggleCategory = (id: string) => {
-    setSelectedIds((prev) => {
+  // カテゴリ別にグループ化
+  const groupedEquipment = useMemo(() => {
+    const map: Record<string, Equipment[]> = {};
+    (equipmentData?.items || []).forEach((item) => {
+      const key = item.category?.name || "その他";
+      if (!map[key]) {
+        map[key] = [];
+      }
+      map[key].push(item);
+    });
+    return map;
+  }, [equipmentData]);
+
+  // 機器選択/解除
+  const toggleEquipment = (id: string) => {
+    setSelectedEquipmentIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -100,24 +145,38 @@ export default function CategorySelectionModal({
     });
   };
 
-  // 全選択/全解除
-  const toggleAll = () => {
-    if (selectedIds.size === categories.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(categories.map((c) => c.id)));
-    }
+  // カテゴリ内の選択された機器数を取得
+  const getSelectedCountInCategory = (categoryName: string) => {
+    const items = groupedEquipment[categoryName] || [];
+    return items.filter((item) => selectedEquipmentIds.has(item.id)).length;
+  };
+
+  // 選択された機器リストを取得
+  const getSelectedEquipment = (): Equipment[] => {
+    return (equipmentData?.items || []).filter((item) =>
+      selectedEquipmentIds.has(item.id),
+    );
   };
 
   // 次へ進む
   const handleProceed = () => {
-    onProceed(Array.from(selectedIds));
-    setSelectedIds(new Set());
+    const selectedEquipment = getSelectedEquipment();
+    if (onEquipmentSelected && selectedEquipment.length > 0) {
+      // 機器が直接選択されている場合は、新しいコールバックを使用
+      onEquipmentSelected(selectedEquipment);
+    } else {
+      // 従来の動作：カテゴリIDを渡す（後方互換性のため）
+      const categoryIds = sortedCategories
+        .filter((cat) => getSelectedCountInCategory(cat.name) > 0)
+        .map((cat) => cat.id);
+      onProceed(categoryIds);
+    }
+    setSelectedEquipmentIds(new Set());
   };
 
   // モーダルを閉じる
   const handleClose = () => {
-    setSelectedIds(new Set());
+    setSelectedEquipmentIds(new Set());
     setCustomEquipmentName("");
     onClose();
   };
@@ -130,193 +189,281 @@ export default function CategorySelectionModal({
     }
   };
 
-  const isAllSelected = selectedIds.size === categories.length;
+  const totalSelectedCount = selectedEquipmentIds.size;
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      size="2xl"
+      size="4xl"
       scrollBehavior="inside"
       motionPreset="slideInBottom"
     >
       <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(4px)" />
-      <ModalContent borderRadius="xl" overflow="hidden">
+      <ModalContent borderRadius="xl" overflow="hidden" maxH="90vh">
         {/* ヘッダー（グラデーション背景） */}
         <Box bgGradient={gradientBg} color="white" py={6} px={6}>
           <HStack spacing={3} mb={2}>
             <Icon as={FiGrid} boxSize={6} />
             <Text fontSize="xl" fontWeight="bold">
-              カテゴリを選択
+              機材を選択
             </Text>
           </HStack>
           <Text fontSize="sm" opacity={0.9}>
-            {formatDate(date)} に予約する機器のカテゴリを選んでください
+            {formatDate(date)} に予約する機材を選んでください
           </Text>
         </Box>
 
         <ModalCloseButton color="white" />
 
-        <ModalBody py={6}>
-          {/* 全選択ボタン */}
-          <Flex justify="flex-end" mb={4}>
-            <Button
-              size="sm"
-              variant="ghost"
-              leftIcon={<FiCheck />}
-              onClick={toggleAll}
-              colorScheme={isAllSelected ? "blue" : "gray"}
-            >
-              {isAllSelected ? "全て解除" : "全て選択"}
-            </Button>
-          </Flex>
+        <ModalBody py={6} pb="100px">
+          {isLoadingEquipment ? (
+            <Flex justify="center" py={10}>
+              <Spinner size="lg" color="blue.500" />
+            </Flex>
+          ) : (
+            <>
+              {/* アコーディオン形式のカテゴリ・機材一覧 */}
+              <Accordion allowMultiple defaultIndex={[]}>
+                {sortedCategories.map((category) => {
+                  const categoryItems = groupedEquipment[category.name] || [];
+                  const selectedInCategory = getSelectedCountInCategory(
+                    category.name,
+                  );
 
-          {/* カテゴリグリッド */}
-          <SimpleGrid columns={{ base: 1, sm: 2, md: 3 }} spacing={4}>
-            {sortedCategories.map((category) => {
-              const isSelected = selectedIds.has(category.id);
-              return (
-                <Box
-                  key={category.id}
-                  as="button"
-                  onClick={() => toggleCategory(category.id)}
-                  p={4}
-                  borderRadius="xl"
-                  borderWidth="2px"
-                  borderColor={isSelected ? selectedBorder : cardBorder}
-                  bg={isSelected ? selectedBg : cardBg}
-                  textAlign="left"
-                  transition="all 0.2s ease"
-                  _hover={{
-                    bg: isSelected ? selectedBg : hoverBg,
-                    transform: "translateY(-2px)",
-                    shadow: "lg",
-                  }}
-                  _active={{
-                    transform: "translateY(0)",
-                  }}
-                  position="relative"
-                  overflow="hidden"
-                >
-                  {/* 選択チェックマーク */}
-                  {isSelected && (
-                    <Box
-                      position="absolute"
-                      top={2}
-                      right={2}
-                      bg="blue.500"
-                      color="white"
-                      borderRadius="full"
-                      p={1}
+                  if (categoryItems.length === 0) return null;
+
+                  return (
+                    <AccordionItem
+                      key={category.id}
+                      border="1px solid"
+                      borderColor="gray.200"
+                      borderRadius="lg"
+                      mb={3}
+                      overflow="hidden"
                     >
-                      <Icon as={FiCheck} boxSize={3} />
-                    </Box>
-                  )}
-
-                  <VStack align="start" spacing={2}>
-                    <HStack spacing={2}>
-                      <Icon
-                        as={FiPackage}
-                        boxSize={5}
-                        color={isSelected ? "blue.500" : "gray.400"}
-                      />
-                      <Text
-                        fontWeight="bold"
-                        fontSize="md"
-                        color={isSelected ? "blue.700" : "gray.700"}
+                      <AccordionButton
+                        py={4}
+                        px={5}
+                        bg="white"
+                        _hover={{ bg: "gray.50" }}
+                        _expanded={{
+                          bg: "blue.50",
+                          borderBottom: "1px solid",
+                          borderColor: "blue.100",
+                        }}
                       >
-                        {category.name}
-                      </Text>
-                    </HStack>
+                        <HStack flex={1} spacing={3}>
+                          <Icon as={FiPackage} color="blue.500" />
+                          <Text fontWeight="bold" fontSize="md">
+                            {category.name}
+                          </Text>
+                          <Badge colorScheme="gray" fontSize="xs">
+                            {categoryItems.length} 件
+                          </Badge>
+                          {selectedInCategory > 0 && (
+                            <Badge colorScheme="green" fontSize="xs">
+                              <Icon as={FiCheck} mr={1} />
+                              {selectedInCategory} 選択中
+                            </Badge>
+                          )}
+                        </HStack>
+                        <AccordionIcon />
+                      </AccordionButton>
 
-                    {category.description && (
-                      <Text fontSize="xs" color="gray.500" noOfLines={2}>
-                        {category.description}
-                      </Text>
-                    )}
+                      <AccordionPanel pb={4} pt={4} bg="gray.50">
+                        <SimpleGrid
+                          columns={{ base: 2, sm: 3, md: 4 }}
+                          spacing={3}
+                        >
+                          {categoryItems.map((equipment) => {
+                            const imageSrc = resolveEquipmentImage(
+                              equipment.name,
+                              equipment.imageUrl,
+                            );
+                            const isSelected = selectedEquipmentIds.has(
+                              equipment.id,
+                            );
 
-                    {category.equipmentCount !== undefined && (
-                      <Badge
-                        colorScheme={isSelected ? "blue" : "gray"}
-                        fontSize="xs"
-                      >
-                        {category.equipmentCount} 機器
-                      </Badge>
-                    )}
-                  </VStack>
+                            return (
+                              <Box
+                                key={equipment.id}
+                                as="button"
+                                onClick={() => toggleEquipment(equipment.id)}
+                                bg={isSelected ? selectedBg : cardBg}
+                                borderWidth="2px"
+                                borderColor={
+                                  isSelected ? selectedBorder : cardBorder
+                                }
+                                borderRadius="lg"
+                                overflow="hidden"
+                                textAlign="left"
+                                transition="all 0.2s ease"
+                                _hover={{
+                                  transform: "translateY(-2px)",
+                                  shadow: "md",
+                                  borderColor: isSelected
+                                    ? selectedBorder
+                                    : "blue.300",
+                                }}
+                                _active={{
+                                  transform: "translateY(0)",
+                                }}
+                                position="relative"
+                              >
+                                {/* 選択チェックマーク */}
+                                {isSelected && (
+                                  <Box
+                                    position="absolute"
+                                    top={2}
+                                    right={2}
+                                    bg="blue.500"
+                                    color="white"
+                                    borderRadius="full"
+                                    p={1}
+                                    zIndex={1}
+                                  >
+                                    <Icon as={FiCheck} boxSize={3} />
+                                  </Box>
+                                )}
+
+                                {/* 画像 */}
+                                <Box h="80px" bg="gray.100" position="relative">
+                                  {imageSrc ? (
+                                    <Image
+                                      src={imageSrc}
+                                      alt={equipment.name}
+                                      w="100%"
+                                      h="100%"
+                                      objectFit="cover"
+                                    />
+                                  ) : (
+                                    <Flex
+                                      w="100%"
+                                      h="100%"
+                                      align="center"
+                                      justify="center"
+                                      color="gray.400"
+                                    >
+                                      <Icon as={FiPackage} boxSize={6} />
+                                    </Flex>
+                                  )}
+                                </Box>
+
+                                {/* 情報 */}
+                                <Box p={2}>
+                                  <Text
+                                    fontWeight="bold"
+                                    fontSize="xs"
+                                    noOfLines={2}
+                                    mb={1}
+                                  >
+                                    {equipment.name}
+                                  </Text>
+                                  <HStack justify="space-between">
+                                    <Text fontSize="xs" color="gray.500">
+                                      保有数
+                                    </Text>
+                                    <Badge colorScheme="green" fontSize="xs">
+                                      {equipment.quantity}
+                                    </Badge>
+                                  </HStack>
+                                </Box>
+                              </Box>
+                            );
+                          })}
+                        </SimpleGrid>
+                      </AccordionPanel>
+                    </AccordionItem>
+                  );
+                })}
+              </Accordion>
+
+              {categories.length === 0 && !isLoading && (
+                <Box textAlign="center" py={10}>
+                  <Icon as={FiPackage} boxSize={12} color="gray.300" mb={4} />
+                  <Text color="gray.500">カテゴリが登録されていません</Text>
                 </Box>
-              );
-            })}
-          </SimpleGrid>
+              )}
 
-          {categories.length === 0 && !isLoading && (
-            <Box textAlign="center" py={10}>
-              <Icon as={FiPackage} boxSize={12} color="gray.300" mb={4} />
-              <Text color="gray.500">カテゴリが登録されていません</Text>
-            </Box>
-          )}
-
-          {/* その他の機器を予約するセクション */}
-          <Divider my={6} />
-          <Box
-            p={5}
-            borderWidth="1px"
-            borderRadius="xl"
-            borderColor="gray.200"
-            borderStyle="dashed"
-            bg="gray.50"
-          >
-            <HStack spacing={2} mb={3}>
-              <Icon as={FiEdit3} boxSize={5} color="gray.500" />
-              <Text fontWeight="bold" color="gray.700">
-                その他の機器を予約する
-              </Text>
-            </HStack>
-            <Text fontSize="sm" color="gray.500" mb={4}>
-              リストにない機器を予約したい場合は、機器名を入力してください。
-            </Text>
-            <HStack>
-              <Input
-                placeholder="例: 新規トレーニング機器"
-                value={customEquipmentName}
-                onChange={(e) => setCustomEquipmentName(e.target.value)}
-                bg="white"
-                borderRadius="lg"
-                onKeyPress={(e) => {
-                  if (e.key === "Enter") {
-                    handleCustomReserve();
-                  }
-                }}
-              />
-              <Button
-                colorScheme="gray"
-                onClick={handleCustomReserve}
-                isDisabled={!customEquipmentName.trim()}
-                borderRadius="lg"
+              {/* その他の機器を予約するセクション */}
+              <Divider my={6} />
+              <Box
+                p={5}
+                borderWidth="1px"
+                borderRadius="xl"
+                borderColor="gray.200"
+                borderStyle="dashed"
+                bg="gray.50"
               >
-                予約
-              </Button>
-            </HStack>
-          </Box>
+                <HStack spacing={2} mb={3}>
+                  <Icon as={FiEdit3} boxSize={5} color="gray.500" />
+                  <Text fontWeight="bold" color="gray.700">
+                    その他の機器を予約する
+                  </Text>
+                </HStack>
+                <Text fontSize="sm" color="gray.500" mb={4}>
+                  リストにない機器を予約したい場合は、機器名を入力してください。
+                </Text>
+                <HStack>
+                  <Input
+                    placeholder="例: 新規トレーニング機器"
+                    value={customEquipmentName}
+                    onChange={(e) => setCustomEquipmentName(e.target.value)}
+                    bg="white"
+                    borderRadius="lg"
+                    onKeyPress={(e) => {
+                      if (e.key === "Enter") {
+                        handleCustomReserve();
+                      }
+                    }}
+                  />
+                  <Button
+                    colorScheme="gray"
+                    onClick={handleCustomReserve}
+                    isDisabled={!customEquipmentName.trim()}
+                    borderRadius="lg"
+                  >
+                    予約
+                  </Button>
+                </HStack>
+              </Box>
+            </>
+          )}
         </ModalBody>
 
+        {/* フローティングフッター */}
         <ModalFooter
+          position="absolute"
+          bottom={0}
+          left={0}
+          right={0}
           borderTopWidth="1px"
-          bg={useColorModeValue("gray.50", "gray.800")}
+          bg={floatingBg}
+          shadow="lg"
+          py={4}
         >
-          <HStack spacing={4} w="full" justify="space-between">
-            <Text fontSize="sm" color="gray.600">
-              {selectedIds.size > 0 ? (
-                <>
-                  <Text as="span" fontWeight="bold" color="blue.500">
-                    {selectedIds.size}
-                  </Text>{" "}
-                  カテゴリ選択中
-                </>
-              ) : (
-                "カテゴリを選択してください"
-              )}
-            </Text>
+          <Flex w="full" justify="space-between" align="center">
+            <HStack spacing={3}>
+              <Icon as={FiShoppingCart} boxSize={5} color="blue.500" />
+              <Text fontSize="sm" color="gray.600">
+                {totalSelectedCount > 0 ? (
+                  <>
+                    <Text
+                      as="span"
+                      fontWeight="bold"
+                      color="blue.500"
+                      fontSize="lg"
+                    >
+                      {totalSelectedCount}
+                    </Text>{" "}
+                    点選択中
+                  </>
+                ) : (
+                  "機材を選択してください"
+                )}
+              </Text>
+            </HStack>
 
             <HStack spacing={3}>
               <Button variant="ghost" onClick={handleClose}>
@@ -326,7 +473,7 @@ export default function CategorySelectionModal({
                 colorScheme="blue"
                 rightIcon={<FiArrowRight />}
                 onClick={handleProceed}
-                isDisabled={selectedIds.size === 0}
+                isDisabled={totalSelectedCount === 0}
                 bgGradient={gradientBg}
                 _hover={{
                   bgGradient: "linear(to-br, blue.600, purple.600)",
@@ -337,10 +484,10 @@ export default function CategorySelectionModal({
                   transform: "translateY(0)",
                 }}
               >
-                機器を選択
+                次へ：予約情報を入力
               </Button>
             </HStack>
-          </HStack>
+          </Flex>
         </ModalFooter>
       </ModalContent>
     </Modal>
