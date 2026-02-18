@@ -1,3 +1,4 @@
+/// <reference types="node" />
 /**
  * ローカルパス形式のimageUrlをクリアするスクリプト
  * 
