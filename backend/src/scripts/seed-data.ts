@@ -6,6 +6,7 @@ import 'reflect-metadata';
 import AppDataSource from '../data-source';
 import { Equipment } from '../entity/Equipment';
 import { EquipmentCategory } from '../entity/EquipmentCategory';
+import { DashboardContent, ContentType } from '../entity/DashboardContent';
 
 async function seedData() {
   try {
@@ -18,17 +19,18 @@ async function seedData() {
     // 既存データ確認
     const existingEquipment = await equipmentRepo.count();
     if (existingEquipment > 0) {
-      console.log(`既に${existingEquipment}件の資機材データが存在します。スキップします。`);
-      await AppDataSource.destroy();
-      return;
+      console.log(`既に${existingEquipment}件の資機材データが存在します。資機材作成はスキップします。`);
+      // await AppDataSource.destroy(); // 削除
+      // return; // 削除
     }
 
-    // カテゴリ作成
+    // カテゴリ作成（正しいカテゴリ: master-equipment.json に基づく）
     const categories = [
-      { name: '医療機器', description: '医療用の機器・装置' },
-      { name: '事務機器', description: 'オフィス用機器' },
-      { name: '視聴覚機器', description: 'プロジェクター、スクリーン等' },
-      { name: '消耗品', description: '使い捨て・消耗品類' }
+      { name: '蘇生講習資機材', description: '蘇生講習用の機材' },
+      { name: 'トレーニング資機材', description: 'トレーニング用の機材' },
+      { name: '機械類', description: '機械類（無制限レンタル可）' },
+      { name: '消耗品', description: '消耗品（無制限レンタル可）' },
+      { name: 'その他', description: 'その他の機材' }
     ];
 
     const savedCategories: EquipmentCategory[] = [];
@@ -44,66 +46,64 @@ async function seedData() {
       }
     }
 
-    // 資機材サンプルデータ
+    // 資機材サンプルデータ（master-equipment.json に基づく代表的な機材）
     const equipmentData = [
       {
-        name: '心電計',
-        description: '12誘導心電図記録装置',
-        quantity: 5,
-        location: '1階 検査室',
-        category: savedCategories.find(c => c.name === '医療機器')
-      },
-      {
-        name: '血圧計（自動）',
-        description: '自動血圧測定装置',
-        quantity: 10,
-        location: '各病棟',
-        category: savedCategories.find(c => c.name === '医療機器')
-      },
-      {
-        name: 'パルスオキシメーター',
-        description: '経皮的動脈血酸素飽和度測定器',
-        quantity: 20,
-        location: '各病棟',
-        category: savedCategories.find(c => c.name === '医療機器')
-      },
-      {
-        name: 'プロジェクター',
-        description: '会議室用プロジェクター',
-        quantity: 3,
-        location: '総務課',
-        category: savedCategories.find(c => c.name === '視聴覚機器')
-      },
-      {
-        name: 'スクリーン（移動式）',
-        description: '100インチ移動式スクリーン',
+        name: 'ALS Simulator',
         quantity: 2,
-        location: '総務課',
-        category: savedCategories.find(c => c.name === '視聴覚機器')
+        category: savedCategories.find(c => c.name === '蘇生講習資機材')
       },
       {
-        name: 'ノートPC（貸出用）',
-        description: '研修・会議用ノートパソコン',
-        quantity: 5,
-        location: 'IT管理室',
-        category: savedCategories.find(c => c.name === '事務機器')
+        name: 'Resusci Anne',
+        quantity: 2,
+        category: savedCategories.find(c => c.name === '蘇生講習資機材')
       },
       {
-        name: 'ポインター（レーザー）',
-        description: 'プレゼン用レーザーポインター',
-        quantity: 10,
-        location: '総務課',
+        name: 'AEDトレーナー',
+        quantity: 9,
+        category: savedCategories.find(c => c.name === '蘇生講習資機材')
+      },
+      {
+        name: 'リトルアン',
+        quantity: 9,
+        category: savedCategories.find(c => c.name === '蘇生講習資機材')
+      },
+      {
+        name: '採血・静注シミュレータ シンジョー',
+        quantity: 2,
+        category: savedCategories.find(c => c.name === 'トレーニング資機材')
+      },
+      {
+        name: 'エンドワークプロII',
+        quantity: 2,
+        category: savedCategories.find(c => c.name === 'トレーニング資機材')
+      },
+      {
+        name: '鑷子（ピンセット）',
+        description: 'クーパー',
+        quantity: 1,
         isUnlimited: true,
-        category: savedCategories.find(c => c.name === '事務機器')
+        category: savedCategories.find(c => c.name === '機械類')
+      },
+      {
+        name: '針',
+        description: '糸',
+        quantity: 1,
+        isUnlimited: true,
+        category: savedCategories.find(c => c.name === '消耗品')
       }
     ];
 
     for (const eq of equipmentData) {
+      const existing = await equipmentRepo.findOne({ where: { name: eq.name } });
+      if (existing) {
+        console.log(`資機材「${eq.name}」は既に存在します。スキップ。`);
+        continue;
+      }
       const equipment = equipmentRepo.create({
         name: eq.name,
         description: eq.description,
         quantity: eq.quantity,
-        location: eq.location,
         isActive: true,
         isUnlimited: (eq as any).isUnlimited || false,
         isDeleted: false,
@@ -111,6 +111,55 @@ async function seedData() {
       });
       await equipmentRepo.save(equipment);
       console.log(`資機材作成: ${eq.name}`);
+    }
+
+    // ダッシュボードコンテンツの作成
+    const contentRepo = AppDataSource.getRepository(DashboardContent);
+    const existingContent = await contentRepo.count();
+
+    // 既存データのクリア（ダッシュボードコンテンツ）
+    if (existingContent > 0) {
+      console.log(`既存のダッシュボードコンテンツをクリアします...`);
+      await contentRepo.clear();
+    }
+    
+    // コンテンツ作成（常に実行）
+    const contents = [
+      {
+        type: ContentType.FLOW,
+        title: "予約の流れ",
+        content: "1. カレンダーから日時を選択\n2. 機材を選択\n3. 予約確定",
+        order: 1,
+        isActive: true
+      },
+      {
+        type: ContentType.GUIDE,
+        title: "利用ガイド",
+        content: "利用ガイドの内容です。", 
+        linkUrl: "/guide",
+        order: 1,
+        isActive: true
+      },
+       {
+        type: ContentType.ANNOUNCEMENT,
+        title: "システムメンテナンスのお知らせ",
+        content: "2月20日 12:00-13:00 にメンテナンスを行います。",
+        order: 1,
+        isActive: true
+      },
+       {
+        type: ContentType.LINK,
+        title: "関連リンク",
+        linkUrl: "https://example.com",
+        order: 1,
+        isActive: true
+      }
+    ];
+
+    for (const content of contents) {
+      const newContent = contentRepo.create(content);
+      await contentRepo.save(newContent);
+      console.log(`コンテンツ作成: ${content.title}`);
     }
 
     console.log('\nサンプルデータの投入が完了しました！');

@@ -23,6 +23,13 @@ export interface Equipment {
   updatedAt: string;
 }
 
+// 資機材一覧クエリパラメータ
+export interface EquipmentQueryParams {
+  search?: string;
+  categoryId?: string;
+  isActive?: boolean;
+}
+
 // ページネーション (Firestoreでは仕様が変わる可能性があるが一旦維持)
 export interface Pagination {
   page: number;

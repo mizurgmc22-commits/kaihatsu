@@ -5,22 +5,7 @@ import {
   useEffect,
   ReactNode,
 } from "react";
-import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signOut,
-  User as FirebaseUser,
-} from "firebase/auth";
-import { auth, db } from "../lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: "user" | "admin" | "system_admin";
-  department: string;
-}
+import { User, authApi } from "../api/auth";
 
 interface AuthContextType {
   user: User | null;
@@ -38,60 +23,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isAdmin = user?.role === "admin" || user?.role === "system_admin";
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      console.log(
-        "Auth state changed. User:",
-        firebaseUser?.email,
-        "UID:",
-        firebaseUser?.uid,
-      );
-      if (firebaseUser) {
-        // Firestoreから追加のユーザー情報を取得
-        try {
-          console.log("Fetching Firestore doc for UID:", firebaseUser.uid);
-          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
-          if (userDoc.exists()) {
-            console.log("User doc found:", userDoc.data());
-            const userData = userDoc.data() as Omit<User, "id" | "email">;
-            setUser({
-              id: firebaseUser.uid,
-              email: firebaseUser.email || "",
-              ...userData,
-            });
-          } else {
-            // ドキュメントがない場合は最小限の情報
-            console.warn(
-              "User doc NOT found in Firestore for UID:",
-              firebaseUser.uid,
-            );
-            setUser({
-              id: firebaseUser.uid,
-              email: firebaseUser.email || "",
-              name: firebaseUser.displayName || "ユーザー",
-              role: "user",
-              department: "未設定",
-            });
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-          setUser(null);
-        }
-      } else {
-        setUser(null);
-      }
+  const fetchCurrentUser = async () => {
+    try {
+      const userData = await authApi.getCurrentUser();
+      setUser(userData);
+    } catch (error) {
+      console.error("Failed to fetch current user:", error);
+      localStorage.removeItem("token");
+      setUser(null);
+    } finally {
       setIsLoading(false);
-    });
+    }
+  };
 
-    return () => unsubscribe();
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      fetchCurrentUser();
+    } else {
+      setIsLoading(false);
+    }
   }, []);
 
   const login = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
+    try {
+      const response = await authApi.login(email, password);
+      localStorage.setItem("token", response.token);
+      setUser(response.user);
+    } catch (error) {
+      console.error("Login failed:", error);
+      throw error;
+    }
   };
 
-  const logout = async () => {
-    await signOut(auth);
+  const logout = () => {
+    localStorage.removeItem("token");
+    setUser(null);
   };
 
   return (

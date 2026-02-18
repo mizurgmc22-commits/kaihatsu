@@ -1,6 +1,4 @@
-import axios from "axios";
-
-const API_BASE = "/api";
+import { apiClient } from "./client";
 
 export interface DashboardContent {
   id: string;
@@ -35,29 +33,17 @@ export interface UpdateContentInput {
   isActive?: boolean;
 }
 
-import { auth } from "../lib/firebase";
-
-// 認証トークン取得
-const getAuthHeaders = async () => {
-  const user = auth.currentUser;
-  const token = user ? await user.getIdToken() : null;
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
-
 // 公開コンテンツ取得（認証不要）
 export const getPublicTopPageContent = async (): Promise<
   DashboardContent[]
 > => {
-  const res = await axios.get(`${API_BASE}/top-page-content`);
+  const res = await apiClient.get("/top-page-content");
   return res.data;
 };
 
 // 管理用コンテンツ取得（認証必須）
 export const getAdminTopPageContent = async (): Promise<DashboardContent[]> => {
-  const headers = await getAuthHeaders();
-  const res = await axios.get(`${API_BASE}/top-page-content/admin`, {
-    headers,
-  });
+  const res = await apiClient.get("/top-page-content/admin");
   return res.data;
 };
 
@@ -65,10 +51,7 @@ export const getAdminTopPageContent = async (): Promise<DashboardContent[]> => {
 export const createTopPageContent = async (
   input: CreateContentInput,
 ): Promise<DashboardContent> => {
-  const headers = await getAuthHeaders();
-  const res = await axios.post(`${API_BASE}/top-page-content`, input, {
-    headers,
-  });
+  const res = await apiClient.post("/top-page-content", input);
   return res.data;
 };
 
@@ -77,34 +60,26 @@ export const updateTopPageContent = async (
   id: string,
   input: UpdateContentInput,
 ): Promise<DashboardContent> => {
-  const headers = await getAuthHeaders();
-  const res = await axios.put(`${API_BASE}/top-page-content/${id}`, input, {
-    headers,
-  });
+  const res = await apiClient.put(`/top-page-content/${id}`, input);
   return res.data;
 };
 
 // コンテンツ削除
 export const deleteTopPageContent = async (id: string): Promise<void> => {
-  const headers = await getAuthHeaders();
-  await axios.delete(`${API_BASE}/top-page-content/${id}`, {
-    headers,
-  });
+  await apiClient.delete(`/top-page-content/${id}`);
 };
 
 // ファイルアップロード
 export const uploadTopPageFile = async (
   file: File,
 ): Promise<{ fileUrl: string; filename: string }> => {
-  const headers = await getAuthHeaders();
   const formData = new FormData();
   formData.append("file", file);
-  const res = await axios.post(
-    `${API_BASE}/top-page-content/upload-file`,
+  const res = await apiClient.post(
+    "/top-page-content/upload-file",
     formData,
     {
       headers: {
-        ...headers,
         "Content-Type": "multipart/form-data",
       },
     },
@@ -116,13 +91,9 @@ export const uploadTopPageFile = async (
 export const reorderTopPageContent = async (
   items: { id: string; order: number }[],
 ): Promise<void> => {
-  const headers = await getAuthHeaders();
-  await axios.put(
-    `${API_BASE}/top-page-content/reorder/bulk`,
+  await apiClient.put(
+    "/top-page-content/reorder/bulk",
     { items },
-    {
-      headers,
-    },
   );
 };
 

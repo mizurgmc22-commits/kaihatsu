@@ -1,31 +1,15 @@
-import { db } from "../lib/firebase";
-import {
-  collection,
-  getDocs,
-  getDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  query,
-  where,
-  serverTimestamp,
-  Timestamp,
-} from "firebase/firestore";
+import { apiClient } from "./client";
 import type {
   Equipment,
   EquipmentListResponse,
   EquipmentCategory,
   CategoryInput,
+  EquipmentQueryParams,
 } from "../types/equipment";
 
 // ========== 資機材 API ==========
 
-export interface EquipmentQueryParams {
-  search?: string;
-  categoryId?: string;
-  isActive?: boolean;
-}
+export { EquipmentQueryParams };
 
 // Google Drive URLをプレビュー用に変換するヘルパー（プレビュー専用）
 export const convertGoogleDriveUrl = (url: string): string => {
@@ -67,138 +51,43 @@ export const convertGoogleDriveUrl = (url: string): string => {
   return url;
 };
 
-// ヘルパー: FirestoreドキュメントをEquipment型に変換
-const mapDocToEquipment = (doc: any): Equipment => {
-  const data = doc.data();
-  return {
-    id: doc.id,
-    ...data,
-    createdAt:
-      data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-    updatedAt:
-      data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-  } as Equipment;
-};
-
 // 資機材一覧取得
 export const getEquipmentList = async (
   params?: EquipmentQueryParams,
 ): Promise<EquipmentListResponse> => {
-  const equipmentRef = collection(db, "equipments");
-  let q = query(equipmentRef, where("isDeleted", "==", false));
+  const queryParams = new URLSearchParams();
+  if (params?.search) queryParams.append("search", params.search);
+  if (params?.categoryId) queryParams.append("categoryId", params.categoryId);
+  if (params?.isActive !== undefined)
+    queryParams.append("isActive", String(params.isActive));
 
-  if (params?.categoryId) {
-    q = query(q, where("categoryId", "==", params.categoryId));
-  }
+  // ページネーションが必要ならここで追加（現状はデフォルト）
+  // queryParams.append("page", "1");
+  // queryParams.append("limit", "1000"); // 全件取得に近い形にする
 
-  if (params?.isActive !== undefined) {
-    q = query(q, where("isActive", "==", params.isActive));
-  }
-
-  const querySnapshot = await getDocs(q);
-  let items = querySnapshot.docs.map(mapDocToEquipment);
-
-  // カテゴリ情報を取得してマッピング
-  const categoryRef = collection(db, "categories");
-  const categorySnap = await getDocs(categoryRef);
-  const categoryMap = new Map(
-    categorySnap.docs.map((catDoc) => {
-      const data = catDoc.data();
-      const parseDate = (val: any): string => {
-        if (!val) return new Date().toISOString();
-        if (typeof val === "string") return val;
-        if (val.toDate) return val.toDate().toISOString();
-        return new Date().toISOString();
-      };
-      return [
-        catDoc.id,
-        {
-          id: catDoc.id,
-          name: data.name as string,
-          description: data.description as string,
-          createdAt: parseDate(data.createdAt),
-          updatedAt: parseDate(data.updatedAt),
-        },
-      ];
-    }),
+  const response = await apiClient.get<EquipmentListResponse>(
+    `/equipment?${queryParams.toString()}`,
   );
-
-  // 各機器にカテゴリ情報を付与
-  items = items.map((item) => {
-    const rawItem = item as any;
-    const category = rawItem.categoryId
-      ? categoryMap.get(rawItem.categoryId)
-      : undefined;
-    return {
-      ...item,
-      category,
-    } as Equipment;
-  });
-
-  // クライアント側での検索フィルタ（Firestoreは全文検索が弱いため）
-  if (params?.search) {
-    const searchLower = params.search.toLowerCase();
-    items = items.filter(
-      (item) =>
-        item.name.toLowerCase().includes(searchLower) ||
-        item.description?.toLowerCase().includes(searchLower),
-    );
-  }
-
-  return {
-    items,
-    pagination: {
-      page: 1,
-      limit: items.length,
-      total: items.length,
-      totalPages: 1,
-    },
-  };
+  return response.data;
 };
 
 // 資機材詳細取得
 export const getEquipment = async (id: string): Promise<Equipment> => {
-  const docRef = doc(db, "equipments", id);
-  const docSnap = await getDoc(docRef);
-  if (!docSnap.exists()) {
-    throw new Error("Equipment not found");
-  }
-  return mapDocToEquipment(docSnap);
+  const response = await apiClient.get<Equipment>(`/equipment/${id}`);
+  return response.data;
 };
 
 // 資機材作成（Google Drive URL対応）
 export const createEquipment = async (
   formData: FormData,
 ): Promise<Equipment> => {
-  const name = formData.get("name") as string;
-  const description = formData.get("description") as string;
-  const quantity = parseInt(formData.get("quantity") as string, 10);
-  const location = formData.get("location") as string;
-  const categoryId = formData.get("categoryId") as string;
-  const isActive = formData.get("isActive") === "true";
-  // 画像URLはそのまま保存（変換は表示時に行う）
-  const imageUrl = (formData.get("imageUrl") as string) || "";
-
-  const equipmentData = {
-    name,
-    description,
-    quantity,
-    location,
-    categoryId,
-    imageUrl,
-    isActive,
-    isDeleted: false,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
-
-  const docRef = await addDoc(collection(db, "equipments"), equipmentData);
-  return {
-    id: docRef.id,
-    ...equipmentData,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  } as any;
+  // バックエンドは multipart/form-data を受け付ける
+  const response = await apiClient.post<Equipment>("/equipment", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return response.data;
 };
 
 // 資機材更新（Google Drive URL対応）
@@ -206,84 +95,42 @@ export const updateEquipment = async (
   id: string,
   formData: FormData,
 ): Promise<Equipment> => {
-  const equipmentRef = doc(db, "equipments", id);
-  const docSnap = await getDoc(equipmentRef);
-  if (!docSnap.exists()) throw new Error("Equipment not found");
-
-  const currentData = docSnap.data();
-  const updates: any = {
-    updatedAt: serverTimestamp(),
-  };
-
-  if (formData.has("name")) updates.name = formData.get("name");
-  if (formData.has("description"))
-    updates.description = formData.get("description");
-  if (formData.has("quantity"))
-    updates.quantity = parseInt(formData.get("quantity") as string, 10);
-  if (formData.has("location")) updates.location = formData.get("location");
-  if (formData.has("categoryId"))
-    updates.categoryId = formData.get("categoryId");
-  if (formData.has("isActive"))
-    updates.isActive = formData.get("isActive") === "true";
-
-  // 画像URL処理（Google Drive URL対応）
-  const imageUrlInput = formData.get("imageUrl") as string;
-  const removeImage = formData.get("removeImage") === "true";
-
-  if (removeImage) {
-    updates.imageUrl = "";
-  } else if (imageUrlInput !== null && imageUrlInput !== undefined) {
-    // URLはそのまま保存（変換は表示時に行う）
-    updates.imageUrl = imageUrlInput;
-  }
-
-  await updateDoc(equipmentRef, updates);
-  return { id, ...currentData, ...updates } as any;
+  const response = await apiClient.put<Equipment>(
+    `/equipment/${id}`,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    },
+  );
+  return response.data;
 };
 
 // 資機材削除（論理削除）
 export const deleteEquipment = async (id: string): Promise<void> => {
-  const docRef = doc(db, "equipments", id);
-  await updateDoc(docRef, { isDeleted: true, updatedAt: serverTimestamp() });
+  await apiClient.delete(`/equipment/${id}`);
 };
 
 // ========== カテゴリ API ==========
 
 // カテゴリ一覧取得
 export const getCategories = async (): Promise<EquipmentCategory[]> => {
-  const querySnapshot = await getDocs(collection(db, "categories"));
-  return querySnapshot.docs.map((doc) => {
-    const data = doc.data();
-
-    // createdAt/updatedAt がTimestampの場合とstringの場合を両方処理
-    const parseDate = (val: any): string => {
-      if (!val) return new Date().toISOString();
-      if (typeof val === "string") return val;
-      if (val.toDate) return val.toDate().toISOString();
-      return new Date().toISOString();
-    };
-
-    return {
-      id: doc.id,
-      name: data.name,
-      description: data.description,
-      createdAt: parseDate(data.createdAt),
-      updatedAt: parseDate(data.updatedAt),
-    } as EquipmentCategory;
-  });
+  const response = await apiClient.get<EquipmentCategory[]>(
+    "/equipment/categories/list",
+  );
+  return response.data;
 };
 
 // カテゴリ作成
 export const createCategory = async (
   data: CategoryInput,
 ): Promise<EquipmentCategory> => {
-  const categoryData = {
-    ...data,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
-  const docRef = await addDoc(collection(db, "categories"), categoryData);
-  return { id: docRef.id, ...categoryData } as any;
+  const response = await apiClient.post<EquipmentCategory>(
+    "/equipment/categories",
+    data,
+  );
+  return response.data;
 };
 
 // カテゴリ更新
@@ -291,49 +138,27 @@ export const updateCategory = async (
   id: string,
   data: CategoryInput,
 ): Promise<EquipmentCategory> => {
-  const docRef = doc(db, "categories", id);
-  await updateDoc(docRef, {
-    ...data,
-    updatedAt: serverTimestamp(),
-  });
-  return { id, ...data } as any;
+  const response = await apiClient.put<EquipmentCategory>(
+    `/equipment/categories/${id}`,
+    data,
+  );
+  return response.data;
 };
 
 // カテゴリ削除
 export const deleteCategory = async (id: string): Promise<void> => {
-  const docRef = doc(db, "categories", id);
-  await deleteDoc(docRef);
+  await apiClient.delete(`/equipment/categories/${id}`);
 };
 
 // ========== ユーティリティ ==========
 
-// ローカルパス形式のimageUrlをクリアする
-export const clearLocalImageUrls = async (): Promise<{ updated: number; skipped: number }> => {
-  const equipmentRef = collection(db, "equipments");
-  const snapshot = await getDocs(equipmentRef);
-  
-  let updated = 0;
-  let skipped = 0;
-  
-  for (const docSnapshot of snapshot.docs) {
-    const data = docSnapshot.data();
-    const imageUrl = data.imageUrl;
-    
-    // ローカルパス形式かどうかをチェック
-    if (imageUrl && (
-      imageUrl.startsWith("/api/uploads/") || 
-      imageUrl.includes("localhost") ||
-      imageUrl.startsWith("uploads/")
-    )) {
-      await updateDoc(doc(db, "equipments", docSnapshot.id), {
-        imageUrl: "",
-        updatedAt: serverTimestamp(),
-      });
-      updated++;
-    } else {
-      skipped++;
-    }
-  }
-  
-  return { updated, skipped };
+// ローカルパス形式のimageUrlをクリアする（バックエンドで実装すべきだが、現状APIがないため空実装）
+export const clearLocalImageUrls = async (): Promise<{
+  updated: number;
+  skipped: number;
+}> => {
+  console.warn(
+    "clearLocalImageUrls is not implemented in the new API client yet.",
+  );
+  return { updated: 0, skipped: 0 };
 };

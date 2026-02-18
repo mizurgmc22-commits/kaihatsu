@@ -76,3 +76,48 @@ export interface CalendarData {
   };
   dailyAvailability: Record<string, DailyAvailability>;
 }
+
+// 予約一覧クエリパラメータ
+export interface ReservationQueryParams {
+  equipmentId?: string;
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}
+
+// ページネーション (types/equipment.ts からインポートするか、ここで再定義)
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface ReservationListResponse {
+  items: Reservation[];
+  pagination: Pagination;
+}
+
+export interface MyReservationParams {
+  contactInfo: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  extendedProps: {
+    equipmentName: string;
+    department: string;
+    applicantName: string;
+    quantity: number;
+    status: string;
+  };
+  backgroundColor: string;
+  borderColor: string;
+}
