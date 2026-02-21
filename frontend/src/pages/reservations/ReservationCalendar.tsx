@@ -346,6 +346,7 @@ export default function ReservationCalendar() {
             multiMonth3Month: {
               type: "multiMonth",
               duration: { months: 3 },
+              multiMonthMaxColumns: 1,
             },
           }}
           locale="ja"
