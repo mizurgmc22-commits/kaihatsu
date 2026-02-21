@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import AppDataSource from '../data-source';
-import { Reservation, ReservationStatus } from '../entity/Reservation';
-import { Equipment } from '../entity/Equipment';
-import { User } from '../entity/User';
+import admin from 'firebase-admin';
+import { db } from '../lib/firebase';
+import { findAllEquipment } from '../repositories/equipmentRepository';
+import { countActiveUsers } from '../repositories/userRepository';
 
 const dashboardRouter = Router();
 
@@ -20,30 +20,40 @@ const getEndOfDay = (date: Date) => {
 
 dashboardRouter.get('/stats', async (_req, res, next) => {
   try {
-    const reservationRepo = AppDataSource.getRepository(Reservation);
-    const equipmentRepo = AppDataSource.getRepository(Equipment);
-    const userRepo = AppDataSource.getRepository(User);
-
     const now = new Date();
     const todayStart = getStartOfDay(now);
     const todayEnd = getEndOfDay(now);
 
-    const todayReservations = await reservationRepo
-      .createQueryBuilder('reservation')
-      .where('reservation.startTime BETWEEN :start AND :end', { start: todayStart, end: todayEnd })
-      .getCount();
+    const Timestamp = admin.firestore.Timestamp;
+    const reservationCollection = db.collection('reservations');
 
-    const availableEquipment = await equipmentRepo.count({ where: { isActive: true } });
+    // 全予約を取得し、アプリケーション側でフィルタ（複合インデックス回避）
+    const allReservationsSnapshot = await reservationCollection.get();
 
-    const inUseEquipment = await reservationRepo
-      .createQueryBuilder('reservation')
-      .where('reservation.startTime <= :now AND reservation.endTime >= :now', { now })
-      .andWhere('reservation.status IN (:...statuses)', {
-        statuses: [ReservationStatus.APPROVED, ReservationStatus.PENDING]
-      })
-      .getCount();
+    // 今日の予約数
+    const todayReservations = allReservationsSnapshot.docs.filter((doc) => {
+      const data = doc.data();
+      const startTime = data.startTime?.toDate?.();
+      return startTime && startTime >= todayStart && startTime <= todayEnd;
+    }).length;
 
-    const totalUsers = await userRepo.count({ where: { isActive: true } });
+    // アクティブな機器数
+    const { total: availableEquipment } = await findAllEquipment({ isActive: true });
+
+    // 現在使用中の機器数
+    let inUseEquipment = 0;
+    for (const doc of allReservationsSnapshot.docs) {
+      const data = doc.data();
+      if (!['pending', 'approved'].includes(data.status)) continue;
+      const startTime = data.startTime?.toDate?.();
+      const endTime = data.endTime?.toDate?.();
+      if (startTime && endTime && startTime <= now && endTime >= now) {
+        inUseEquipment++;
+      }
+    }
+
+    // アクティブなユーザー数
+    const totalUsers = await countActiveUsers();
 
     res.json({ todayReservations, availableEquipment, inUseEquipment, totalUsers });
   } catch (error) {

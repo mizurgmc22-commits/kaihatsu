@@ -2,8 +2,12 @@ import express from "express";
 import cors from "cors";
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import AppDataSource from "./data-source";
-import { User } from "./entity/User";
+import { db } from "./lib/firebase";
+import {
+  findUserByEmail,
+  createUser,
+  updateUser,
+} from "./repositories/userRepository";
 import authRouter from "./routes/auth";
 import dashboardRouter from "./routes/dashboard";
 import topPageContentRouter from "./routes/topPageContent";
@@ -53,17 +57,11 @@ app.use((req, res, next) => {
 });
 
 async function ensureDefaultAdmin() {
-  const userRepo = AppDataSource.getRepository(User);
-
-  let admin = await userRepo
-    .createQueryBuilder("user")
-    .addSelect("user.password")
-    .where("user.email = :email", { email: DEFAULT_ADMIN_EMAIL })
-    .getOne();
+  let admin = await findUserByEmail(DEFAULT_ADMIN_EMAIL, true);
 
   if (!admin) {
     const hashedPassword = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
-    admin = userRepo.create({
+    admin = await createUser({
       name: DEFAULT_ADMIN_NAME,
       email: DEFAULT_ADMIN_EMAIL,
       password: hashedPassword,
@@ -71,44 +69,46 @@ async function ensureDefaultAdmin() {
       role: "admin",
       isActive: true,
     });
-    await userRepo.save(admin);
     console.log(`Default admin created (${DEFAULT_ADMIN_EMAIL})`);
     return;
   }
 
   let requiresUpdate = false;
+  const updateData: Record<string, unknown> = {};
 
   if (!admin.isActive) {
-    admin.isActive = true;
+    updateData.isActive = true;
     requiresUpdate = true;
   }
 
   if (admin.role !== "admin" && admin.role !== "system_admin") {
-    admin.role = "admin";
+    updateData.role = "admin";
     requiresUpdate = true;
   }
 
-  const passwordMatches = await bcrypt.compare(
-    DEFAULT_ADMIN_PASSWORD,
-    admin.password,
-  );
-  if (!passwordMatches) {
-    admin.password = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
-    requiresUpdate = true;
+  if (admin.password) {
+    const passwordMatches = await bcrypt.compare(
+      DEFAULT_ADMIN_PASSWORD,
+      admin.password,
+    );
+    if (!passwordMatches) {
+      updateData.password = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
+      requiresUpdate = true;
+    }
   }
 
   if (admin.name !== DEFAULT_ADMIN_NAME) {
-    admin.name = DEFAULT_ADMIN_NAME;
+    updateData.name = DEFAULT_ADMIN_NAME;
     requiresUpdate = true;
   }
 
   if (admin.department !== DEFAULT_ADMIN_DEPARTMENT) {
-    admin.department = DEFAULT_ADMIN_DEPARTMENT;
+    updateData.department = DEFAULT_ADMIN_DEPARTMENT;
     requiresUpdate = true;
   }
 
   if (requiresUpdate) {
-    await userRepo.save(admin);
+    await updateUser(admin.id, updateData as any);
     console.log(`Default admin updated (${DEFAULT_ADMIN_EMAIL})`);
   } else {
     console.log(`Default admin already configured (${DEFAULT_ADMIN_EMAIL})`);
@@ -117,8 +117,11 @@ async function ensureDefaultAdmin() {
 
 async function startServer() {
   try {
-    await AppDataSource.initialize();
-    console.log("Database connected");
+    // Firebase接続確認
+    console.log("Connecting to Firestore...");
+    await db.listCollections();
+    console.log("Firestore connected");
+
     await ensureDefaultAdmin();
 
     app.listen(PORT, () => {
@@ -126,7 +129,7 @@ async function startServer() {
       console.log("Server started at", new Date().toISOString());
     });
   } catch (error) {
-    console.error("Database connection error:", error);
+    console.error("Firebase connection error:", error);
     process.exit(1);
   }
 }

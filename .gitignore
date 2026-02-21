@@ -9,6 +9,10 @@ build/
 # *.sqlite
 backend/database.sqlite
 
+# Firebase Service Account Key
+serviceAccountKey.json
+**/serviceAccountKey.json
+
 # Environment
 .env
 .env.local

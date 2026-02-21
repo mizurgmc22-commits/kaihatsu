@@ -1,16 +1,23 @@
 import { Router } from 'express';
 import type { Request } from 'express';
-import AppDataSource from '../data-source';
-import { Equipment } from '../entity/Equipment';
-import { EquipmentCategory } from '../entity/EquipmentCategory';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { EQUIPMENT_IMAGE_DIR, EQUIPMENT_IMAGE_PUBLIC_PATH } from '../config/upload';
+import {
+  findAllEquipment,
+  findEquipmentById,
+  createEquipment,
+  updateEquipment,
+  deleteEquipment,
+  findAllCategories,
+  findCategoryById,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+} from '../repositories/equipmentRepository';
 
 const equipmentRouter = Router();
-const equipmentRepo = () => AppDataSource.getRepository(Equipment);
-const categoryRepo = () => AppDataSource.getRepository(EquipmentCategory);
 
 type MulterRequest = Request & { file?: Express.Multer.File };
 
@@ -84,56 +91,28 @@ const removeImageFile = async (imageUrl?: string | null) => {
 // 資機材一覧取得（フィルタ・検索対応）
 equipmentRouter.get('/', async (req, res, next) => {
   try {
-    const { search, categoryId, isActive, page = 1, limit = 20 } = req.query;
+    const { search, categoryId, isActive, page, limit } = req.query;
 
-    const queryBuilder = equipmentRepo()
-      .createQueryBuilder('equipment')
-      .leftJoinAndSelect('equipment.category', 'category')
-      .where('equipment.isDeleted = :isDeleted', { isDeleted: false });
+    const isActiveBool = isActive === 'true' ? true : isActive === 'false' ? false : undefined;
 
-    // 検索フィルタ
-    if (search) {
-      queryBuilder.andWhere(
-        '(equipment.name LIKE :search OR equipment.description LIKE :search)',
-        { search: `%${search}%` }
-      );
-    }
+    const { items, total } = await findAllEquipment({
+      search: search as string | undefined,
+      categoryId: categoryId as string | undefined,
+      isActive: isActiveBool,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
 
-    // カテゴリフィルタ
-    if (categoryId) {
-      queryBuilder.andWhere('equipment.categoryId = :categoryId', {
-        categoryId: Number(categoryId)
-      });
-    }
-
-    // アクティブ状態フィルタ
-    if (isActive === 'true') {
-      queryBuilder.andWhere('equipment.isActive = :isActive', {
-        isActive: true
-      });
-    } else if (isActive === 'false') {
-      queryBuilder.andWhere('equipment.isActive = :isActive', {
-        isActive: false
-      });
-    }
-    // isActive が undefined や 'all' の場合は isDeleted=false のみでフィルタ
-
-    // ページネーション
-    const skip = (Number(page) - 1) * Number(limit);
-    queryBuilder.skip(skip).take(Number(limit));
-
-    // 並び順
-    queryBuilder.orderBy('equipment.name', 'ASC');
-
-    const [items, total] = await queryBuilder.getManyAndCount();
+    const effectiveLimit = limit ? Number(limit) : total;
+    const effectivePage = page ? Number(page) : 1;
 
     res.json({
       items,
       pagination: {
-        page: Number(page),
-        limit: Number(limit),
+        page: effectivePage,
+        limit: effectiveLimit,
         total,
-        totalPages: Math.ceil(total / Number(limit))
+        totalPages: effectiveLimit > 0 ? Math.ceil(total / effectiveLimit) : 1
       }
     });
   } catch (error) {
@@ -145,10 +124,7 @@ equipmentRouter.get('/', async (req, res, next) => {
 equipmentRouter.get('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const equipment = await equipmentRepo().findOne({
-      where: { id: Number(id) },
-      relations: ['category', 'reservations']
-    });
+    const equipment = await findEquipmentById(id);
 
     if (!equipment) {
       return res.status(404).json({ message: '資機材が見つかりません' });
@@ -171,29 +147,20 @@ equipmentRouter.post('/', upload.single('image'), async (req, res, next) => {
       return res.status(400).json({ message: '名称と保有数は必須です' });
     }
 
-    const equipment = equipmentRepo().create({
+    const file = (req as MulterRequest).file;
+    const imageUrl = file ? buildImageUrl(file.filename) : undefined;
+
+    const saved = await createEquipment({
       name,
       description,
       quantity,
       location,
-      specifications
+      specifications,
+      imageUrl,
+      isActive: true,
+      categoryId: categoryId || undefined,
     });
 
-    const file = (req as MulterRequest).file;
-    if (file) {
-      equipment.imageUrl = buildImageUrl(file.filename);
-    }
-
-    // カテゴリ設定
-    const parsedCategoryId = toNumber(categoryId);
-    if (parsedCategoryId) {
-      const category = await categoryRepo().findOne({ where: { id: parsedCategoryId } });
-      if (category) {
-        equipment.category = category;
-      }
-    }
-
-    const saved = await equipmentRepo().save(equipment);
     res.status(201).json(saved);
   } catch (error) {
     next(error);
@@ -210,53 +177,45 @@ equipmentRouter.put('/:id', upload.single('image'), async (req, res, next) => {
     const specifications = parseSpecifications(req.body.specifications);
     const removeImage = toBoolean(req.body.removeImage);
 
-    const equipment = await equipmentRepo().findOne({
-      where: { id: Number(id) },
-      relations: ['category']
-    });
+    const existing = await findEquipmentById(id);
 
-    if (!equipment) {
+    if (!existing) {
       return res.status(404).json({ message: '資機材が見つかりません' });
     }
 
-    // 更新フィールド
-    if (name !== undefined) equipment.name = name;
-    if (description !== undefined) equipment.description = description;
-    if (quantity !== undefined) equipment.quantity = quantity;
-    if (location !== undefined) equipment.location = location;
-    if (isActive !== undefined) equipment.isActive = isActive;
-    if (specifications !== undefined) equipment.specifications = specifications;
+    const updateData: Record<string, unknown> = {};
+
+    if (name !== undefined) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
+    if (quantity !== undefined) updateData.quantity = quantity;
+    if (location !== undefined) updateData.location = location;
+    if (isActive !== undefined) updateData.isActive = isActive;
+    if (specifications !== undefined) updateData.specifications = specifications;
 
     // カテゴリ更新
     if (categoryId !== undefined) {
       if (categoryId === null || categoryId === '' || categoryId === 'null') {
-        equipment.category = undefined;
+        updateData.categoryId = null;
       } else {
-        const parsedCategoryId = toNumber(categoryId);
-        if (parsedCategoryId) {
-          const category = await categoryRepo().findOne({ where: { id: parsedCategoryId } });
-          if (category) {
-            equipment.category = category;
-          }
-        }
+        updateData.categoryId = categoryId;
       }
     }
 
     const file = (req as MulterRequest).file;
 
     if (removeImage) {
-      await removeImageFile(equipment.imageUrl);
-      equipment.imageUrl = undefined;
+      await removeImageFile(existing.imageUrl);
+      updateData.imageUrl = null;
     }
 
     if (file) {
       if (!removeImage) {
-        await removeImageFile(equipment.imageUrl);
+        await removeImageFile(existing.imageUrl);
       }
-      equipment.imageUrl = buildImageUrl(file.filename);
+      updateData.imageUrl = buildImageUrl(file.filename);
     }
 
-    const saved = await equipmentRepo().save(equipment);
+    const saved = await updateEquipment(id, updateData);
     res.json(saved);
   } catch (error) {
     next(error);
@@ -267,16 +226,13 @@ equipmentRouter.put('/:id', upload.single('image'), async (req, res, next) => {
 equipmentRouter.delete('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const equipment = await equipmentRepo().findOne({ where: { id: Number(id) } });
+    const existing = await findEquipmentById(id);
 
-    if (!equipment) {
+    if (!existing) {
       return res.status(404).json({ message: '資機材が見つかりません' });
     }
 
-    // 論理削除扱い（レコードは保持し予約利用を止めるため非アクティブ化のみ）
-    equipment.isActive = false;
-    await equipmentRepo().save(equipment);
-
+    await deleteEquipment(id);
     res.json({ message: '資機材を無効化しました' });
   } catch (error) {
     next(error);
@@ -288,9 +244,7 @@ equipmentRouter.delete('/:id', async (req, res, next) => {
 // カテゴリ一覧取得
 equipmentRouter.get('/categories/list', async (_req, res, next) => {
   try {
-    const categories = await categoryRepo().find({
-      relations: ['equipments']
-    });
+    const categories = await findAllCategories();
 
     // 表示順: 蘇生講習資機材 → トレーニング資機材 → 機械類 → 消耗品 → その他 → それ以外（名前順）
     const ORDER = ['蘇生講習資機材', 'トレーニング資機材', '機械類', '消耗品', 'その他'];
@@ -300,7 +254,6 @@ equipmentRouter.get('/categories/list', async (_req, res, next) => {
       const ib = ORDER.indexOf(b.name);
 
       if (ia === -1 && ib === -1) {
-        // 両方とも定義外の場合は名前順
         return a.name.localeCompare(b.name, 'ja');
       }
       if (ia === -1) return 1;
@@ -308,12 +261,16 @@ equipmentRouter.get('/categories/list', async (_req, res, next) => {
       return ia - ib;
     });
 
-    // 各カテゴリの資機材数を追加
-    const result = sorted.map((cat) => ({
-      ...cat,
-      equipmentCount: cat.equipments?.length || 0,
-      equipments: undefined // 詳細は含めない
-    }));
+    // 各カテゴリの資機材数を取得
+    const result = await Promise.all(
+      sorted.map(async (cat) => {
+        const { total } = await findAllEquipment({ categoryId: cat.id });
+        return {
+          ...cat,
+          equipmentCount: total,
+        };
+      })
+    );
 
     res.json(result);
   } catch (error) {
@@ -331,13 +288,13 @@ equipmentRouter.post('/categories', async (req, res, next) => {
     }
 
     // 重複チェック
-    const existing = await categoryRepo().findOne({ where: { name } });
+    const allCategories = await findAllCategories();
+    const existing = allCategories.find((c) => c.name === name);
     if (existing) {
       return res.status(409).json({ message: '同名のカテゴリが既に存在します' });
     }
 
-    const category = categoryRepo().create({ name, description });
-    const saved = await categoryRepo().save(category);
+    const saved = await createCategory({ name, description });
     res.status(201).json(saved);
   } catch (error) {
     next(error);
@@ -350,16 +307,16 @@ equipmentRouter.put('/categories/:id', async (req, res, next) => {
     const { id } = req.params;
     const { name, description } = req.body;
 
-    const category = await categoryRepo().findOne({ where: { id: Number(id) } });
-
+    const category = await findCategoryById(id);
     if (!category) {
       return res.status(404).json({ message: 'カテゴリが見つかりません' });
     }
 
-    if (name !== undefined) category.name = name;
-    if (description !== undefined) category.description = description;
+    const updateData: Record<string, unknown> = {};
+    if (name !== undefined) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
 
-    const saved = await categoryRepo().save(category);
+    const saved = await updateCategory(id, updateData);
     res.json(saved);
   } catch (error) {
     next(error);
@@ -370,23 +327,21 @@ equipmentRouter.put('/categories/:id', async (req, res, next) => {
 equipmentRouter.delete('/categories/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const category = await categoryRepo().findOne({
-      where: { id: Number(id) },
-      relations: ['equipments']
-    });
+    const category = await findCategoryById(id);
 
     if (!category) {
       return res.status(404).json({ message: 'カテゴリが見つかりません' });
     }
 
     // 資機材が紐づいている場合は削除不可
-    if (category.equipments && category.equipments.length > 0) {
+    const { total } = await findAllEquipment({ categoryId: id, includeDeleted: true });
+    if (total > 0) {
       return res.status(400).json({
         message: 'このカテゴリには資機材が登録されているため削除できません'
       });
     }
 
-    await categoryRepo().remove(category);
+    await deleteCategory(id);
     res.json({ message: 'カテゴリを削除しました' });
   } catch (error) {
     next(error);

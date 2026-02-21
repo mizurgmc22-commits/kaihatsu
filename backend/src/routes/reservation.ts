@@ -1,54 +1,42 @@
 import { Router } from 'express';
-import { Between, LessThanOrEqual, MoreThanOrEqual, In } from 'typeorm';
-import AppDataSource from '../data-source';
-import { Reservation, ReservationStatus } from '../entity/Reservation';
-import { Equipment } from '../entity/Equipment';
-import { User } from '../entity/User';
+import {
+  findAllReservations,
+  findReservationById,
+  findReservationEvents,
+  findReservationsForEquipmentInRange,
+  getReservedQuantity,
+  createReservation,
+  updateReservation,
+  deleteReservation,
+  toDate,
+} from '../repositories/reservationRepository';
+import {
+  findAllEquipment,
+  findEquipmentById,
+} from '../repositories/equipmentRepository';
 
 const reservationRouter = Router();
-const reservationRepo = () => AppDataSource.getRepository(Reservation);
-const equipmentRepo = () => AppDataSource.getRepository(Equipment);
-const userRepo = () => AppDataSource.getRepository(User);
+
+// ステータス定数
+const ReservationStatus = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+  CANCELLED: 'cancelled',
+  COMPLETED: 'completed',
+};
 
 // ========== 予約可能数チェック ==========
 
-// 指定期間の予約済み数量を取得
-async function getReservedQuantity(
-  equipmentId: number,
-  startTime: Date,
-  endTime: Date,
-  excludeReservationId?: number
-): Promise<number> {
-  const queryBuilder = reservationRepo()
-    .createQueryBuilder('reservation')
-    .select('COALESCE(SUM(reservation.quantity), 0)', 'total')
-    .where('reservation.equipmentId = :equipmentId', { equipmentId })
-    .andWhere('reservation.status IN (:...statuses)', {
-      statuses: [ReservationStatus.PENDING, ReservationStatus.APPROVED]
-    })
-    .andWhere(
-      '(reservation.startTime < :endTime AND reservation.endTime > :startTime)',
-      { startTime, endTime }
-    );
-
-  if (excludeReservationId) {
-    queryBuilder.andWhere('reservation.id != :excludeId', { excludeId: excludeReservationId });
-  }
-
-  const result = await queryBuilder.getRawOne();
-  return parseInt(result.total) || 0;
-}
-
-// 予約可能かチェック
 async function checkAvailability(
-  equipmentId: number,
+  equipmentId: string,
   startTime: Date,
   endTime: Date,
   requestedQuantity: number,
-  excludeReservationId?: number
+  excludeReservationId?: string
 ): Promise<{ available: boolean; remainingQuantity: number; totalQuantity: number; isUnlimited: boolean }> {
-  const equipment = await equipmentRepo().findOne({ where: { id: equipmentId, isDeleted: false }, relations: ['category'] });
-  if (!equipment || !equipment.isActive) {
+  const equipment = await findEquipmentById(equipmentId);
+  if (!equipment || !equipment.isActive || equipment.isDeleted) {
     return { available: false, remainingQuantity: 0, totalQuantity: 0, isUnlimited: false };
   }
 
@@ -56,7 +44,7 @@ async function checkAvailability(
   if (equipment.isUnlimited || equipment.category?.name === '消耗品') {
     return {
       available: true,
-      remainingQuantity: -1, // -1 = 無制限
+      remainingQuantity: -1,
       totalQuantity: equipment.quantity,
       isUnlimited: true
     };
@@ -80,39 +68,32 @@ reservationRouter.get('/', async (req, res, next) => {
   try {
     const { equipmentId, startDate, endDate, status, page = 1, limit = 20 } = req.query;
 
-    const queryBuilder = reservationRepo()
-      .createQueryBuilder('reservation')
-      .leftJoinAndSelect('reservation.equipment', 'equipment')
-      .leftJoinAndSelect('equipment.category', 'category')
-      .leftJoinAndSelect('reservation.user', 'user');
+    const { items: rawItems, total } = await findAllReservations({
+      equipmentId: equipmentId as string | undefined,
+      startDate: startDate as string | undefined,
+      endDate: endDate as string | undefined,
+      status: status as string | undefined,
+      page: Number(page),
+      limit: Number(limit),
+    });
 
-    if (equipmentId) {
-      queryBuilder.andWhere('reservation.equipmentId = :equipmentId', {
-        equipmentId: Number(equipmentId)
-      });
-    }
-
-    if (startDate) {
-      queryBuilder.andWhere('reservation.endTime >= :startDate', {
-        startDate: new Date(startDate as string)
-      });
-    }
-
-    if (endDate) {
-      queryBuilder.andWhere('reservation.startTime <= :endDate', {
-        endDate: new Date(endDate as string)
-      });
-    }
-
-    if (status) {
-      queryBuilder.andWhere('reservation.status = :status', { status });
-    }
-
-    const skip = (Number(page) - 1) * Number(limit);
-    queryBuilder.skip(skip).take(Number(limit));
-    queryBuilder.orderBy('reservation.startTime', 'ASC');
-
-    const [items, total] = await queryBuilder.getManyAndCount();
+    // equipment情報を付加
+    const items = await Promise.all(
+      rawItems.map(async (r) => {
+        let equipment = undefined;
+        if (r.equipmentId) {
+          equipment = await findEquipmentById(r.equipmentId);
+        }
+        return {
+          ...r,
+          equipment,
+          startTime: toDate(r.startTime)?.toISOString(),
+          endTime: toDate(r.endTime)?.toISOString(),
+          createdAt: r.createdAt ? (r.createdAt as any).toDate?.()?.toISOString?.() || r.createdAt : undefined,
+          updatedAt: r.updatedAt ? (r.updatedAt as any).toDate?.()?.toISOString?.() || r.updatedAt : undefined,
+        };
+      })
+    );
 
     res.json({
       items,
@@ -137,34 +118,36 @@ reservationRouter.get('/events', async (req, res, next) => {
       return res.status(400).json({ message: '開始日と終了日は必須です' });
     }
 
-    const reservations = await reservationRepo()
-      .createQueryBuilder('reservation')
-      .leftJoinAndSelect('reservation.equipment', 'equipment')
-      .where('reservation.status IN (:...statuses)', {
-        statuses: [ReservationStatus.PENDING, ReservationStatus.APPROVED]
-      })
-      .andWhere('reservation.startTime <= :end', { end: new Date(end as string) })
-      .andWhere('reservation.endTime >= :start', { start: new Date(start as string) })
-      .orderBy('reservation.startTime', 'ASC')
-      .getMany();
+    const reservations = await findReservationEvents(start as string, end as string);
 
     // FullCalendar用のイベント形式に変換
-    const events = reservations.map((r) => ({
-      id: String(r.id),
-      title: `${r.equipment?.name || r.customEquipmentName || '未設定'} - ${r.department}`,
-      start: r.startTime,
-      end: r.endTime,
-      extendedProps: {
-        equipmentName: r.equipment?.name || r.customEquipmentName || '未設定',
-        department: r.department,
-        applicantName: r.applicantName,
-        quantity: r.quantity,
-        status: r.status
-      },
-      backgroundColor: r.status === ReservationStatus.APPROVED ? '#38A169' : '#ED8936',
-      borderColor: r.status === ReservationStatus.APPROVED ? '#2F855A' : '#DD6B20'
-    }));
+    const eventsPromises = reservations
+      .filter((r) => [ReservationStatus.PENDING, ReservationStatus.APPROVED].includes(r.status))
+      .map(async (r) => {
+        let equipmentName = r.customEquipmentName || '未設定';
+        if (r.equipmentId) {
+          const equipment = await findEquipmentById(r.equipmentId);
+          if (equipment) equipmentName = equipment.name;
+        }
 
+        return {
+          id: r.id,
+          title: `${equipmentName} - ${r.department}`,
+          start: toDate(r.startTime)?.toISOString(),
+          end: toDate(r.endTime)?.toISOString(),
+          extendedProps: {
+            equipmentName,
+            department: r.department,
+            applicantName: r.applicantName,
+            quantity: r.quantity,
+            status: r.status
+          },
+          backgroundColor: r.status === ReservationStatus.APPROVED ? '#38A169' : '#ED8936',
+          borderColor: r.status === ReservationStatus.APPROVED ? '#2F855A' : '#DD6B20'
+        };
+      });
+
+    const events = await Promise.all(eventsPromises);
     res.json(events);
   } catch (error) {
     next(error);
@@ -187,59 +170,29 @@ reservationRouter.get('/available', async (req, res, next) => {
     endOfDay.setHours(23, 59, 59, 999);
 
     // アクティブな機器を取得
-    const queryBuilder = equipmentRepo()
-      .createQueryBuilder('equipment')
-      .leftJoinAndSelect('equipment.category', 'category')
-      .where('equipment.isDeleted = :isDeleted', { isDeleted: false })
-      .andWhere('equipment.isActive = :isActive', { isActive: true });
-
-    if (categoryId) {
-      queryBuilder.andWhere('equipment.categoryId = :categoryId', {
-        categoryId: Number(categoryId)
-      });
-    }
-
-    const equipments = await queryBuilder.orderBy('equipment.name', 'ASC').getMany();
-
-    const limitedEquipmentIds = equipments
-      .filter((equipment) => !equipment.isUnlimited && equipment.category?.name !== '消耗品')
-      .map((equipment) => equipment.id);
-
-    let reservedMap: Record<number, number> = {};
-
-    if (limitedEquipmentIds.length > 0) {
-      const reservationSums = await reservationRepo()
-        .createQueryBuilder('reservation')
-        .select('reservation.equipmentId', 'equipmentId')
-        .addSelect('COALESCE(SUM(reservation.quantity), 0)', 'reservedQuantity')
-        .where('reservation.equipmentId IN (:...equipmentIds)', { equipmentIds: limitedEquipmentIds })
-        .andWhere('reservation.status IN (:...statuses)', {
-          statuses: [ReservationStatus.PENDING, ReservationStatus.APPROVED]
-        })
-        .andWhere('reservation.startTime < :endOfDay AND reservation.endTime > :startOfDay', {
-          startOfDay,
-          endOfDay
-        })
-        .groupBy('reservation.equipmentId')
-        .getRawMany();
-
-      reservedMap = reservationSums.reduce<Record<number, number>>((acc, row) => {
-        acc[row.equipmentId] = Number(row.reservedQuantity) || 0;
-        return acc;
-      }, {});
-    }
-
-    const result = equipments.map((equipment) => {
-      const isUnlimited = equipment.isUnlimited || equipment.category?.name === '消耗品';
-      const reservedQuantity = isUnlimited ? 0 : reservedMap[equipment.id] || 0;
-      const remainingQuantity = isUnlimited ? -1 : equipment.quantity - reservedQuantity;
-      return {
-        ...equipment,
-        remainingQuantity,
-        isAvailable: isUnlimited || remainingQuantity > 0,
-        isUnlimited
-      };
+    const { items: equipments } = await findAllEquipment({
+      isActive: true,
+      categoryId: categoryId as string | undefined,
     });
+
+    const result = await Promise.all(
+      equipments.map(async (equipment) => {
+        const isUnlimited = equipment.isUnlimited || equipment.category?.name === '消耗品';
+        let reservedQuantity = 0;
+
+        if (!isUnlimited) {
+          reservedQuantity = await getReservedQuantity(equipment.id, startOfDay, endOfDay);
+        }
+
+        const remainingQuantity = isUnlimited ? -1 : equipment.quantity - reservedQuantity;
+        return {
+          ...equipment,
+          remainingQuantity,
+          isAvailable: isUnlimited || remainingQuantity > 0,
+          isUnlimited
+        };
+      })
+    );
 
     res.json(result);
   } catch (error) {
@@ -257,26 +210,16 @@ reservationRouter.get('/calendar/:equipmentId', async (req, res, next) => {
       return res.status(400).json({ message: '年月は必須です' });
     }
 
-    const startDate = new Date(Number(year), Number(month) - 1, 1);
-    const endDate = new Date(Number(year), Number(month), 0, 23, 59, 59, 999);
-
-    const equipment = await equipmentRepo().findOne({ where: { id: Number(equipmentId), isDeleted: false } });
-    if (!equipment) {
+    const equipment = await findEquipmentById(equipmentId);
+    if (!equipment || equipment.isDeleted) {
       return res.status(404).json({ message: '機器が見つかりません' });
     }
 
+    const startDate = new Date(Number(year), Number(month) - 1, 1);
+    const endDate = new Date(Number(year), Number(month), 0, 23, 59, 59, 999);
+
     // 月間の予約を取得
-    const reservations = await reservationRepo()
-      .createQueryBuilder('reservation')
-      .leftJoinAndSelect('reservation.user', 'user')
-      .where('reservation.equipmentId = :equipmentId', { equipmentId: Number(equipmentId) })
-      .andWhere('reservation.status IN (:...statuses)', {
-        statuses: [ReservationStatus.PENDING, ReservationStatus.APPROVED]
-      })
-      .andWhere('reservation.startTime <= :endDate', { endDate })
-      .andWhere('reservation.endTime >= :startDate', { startDate })
-      .orderBy('reservation.startTime', 'ASC')
-      .getMany();
+    const reservations = await findReservationsForEquipmentInRange(equipmentId, startDate, endDate);
 
     // 日ごとの残数を計算
     const daysInMonth = new Date(Number(year), Number(month), 0).getDate();
@@ -289,8 +232,9 @@ reservationRouter.get('/calendar/:equipmentId', async (req, res, next) => {
 
       // その日に重なる予約を抽出
       const dayReservations = reservations.filter((r) => {
-        const rStart = new Date(r.startTime);
-        const rEnd = new Date(r.endTime);
+        const rStart = toDate(r.startTime);
+        const rEnd = toDate(r.endTime);
+        if (!rStart || !rEnd) return false;
         return rStart <= dayEnd && rEnd >= dayStart;
       });
 
@@ -302,7 +246,7 @@ reservationRouter.get('/calendar/:equipmentId', async (req, res, next) => {
           id: r.id,
           quantity: r.quantity,
           purpose: r.purpose,
-          userName: r.user?.name || '不明',
+          userName: r.applicantName || '不明',
           status: r.status
         }))
       };
@@ -329,79 +273,53 @@ reservationRouter.get('/admin/export', async (req, res, next) => {
   try {
     const { status, startDate, endDate, equipmentId, department } = req.query;
 
-    const queryBuilder = reservationRepo()
-      .createQueryBuilder('reservation')
-      .leftJoinAndSelect('reservation.equipment', 'equipment')
-      .leftJoinAndSelect('equipment.category', 'category')
-      .leftJoinAndSelect('reservation.user', 'user');
+    const { items: rawReservations } = await findAllReservations({
+      equipmentId: equipmentId as string | undefined,
+      startDate: startDate as string | undefined,
+      endDate: endDate as string | undefined,
+      status: status as string | undefined,
+      limit: 10000, // CSVでは全件取得
+    });
 
-    // フィルタ条件
-    if (status) {
-      queryBuilder.andWhere('reservation.status = :status', { status });
-    }
-
-    if (startDate) {
-      queryBuilder.andWhere('reservation.startTime >= :startDate', {
-        startDate: new Date(startDate as string)
-      });
-    }
-
-    if (endDate) {
-      queryBuilder.andWhere('reservation.endTime <= :endDate', {
-        endDate: new Date(endDate as string)
-      });
-    }
-
-    if (equipmentId) {
-      queryBuilder.andWhere('reservation.equipmentId = :equipmentId', {
-        equipmentId: Number(equipmentId)
-      });
-    }
-
+    // department フィルタ（Firestoreでは部分一致が難しいためアプリケーション側で）
+    let reservations = rawReservations;
     if (department) {
-      queryBuilder.andWhere('reservation.department LIKE :department', {
-        department: `%${department}%`
-      });
+      const deptStr = department as string;
+      reservations = reservations.filter((r) =>
+        r.department.includes(deptStr)
+      );
     }
 
-    queryBuilder.orderBy('reservation.startTime', 'DESC');
-
-    const reservations = await queryBuilder.getMany();
+    // equipment情報を付加
+    const reservationsWithEquipment = await Promise.all(
+      reservations.map(async (r) => {
+        let equipment = undefined;
+        if (r.equipmentId) {
+          equipment = await findEquipmentById(r.equipmentId);
+        }
+        return { ...r, equipment };
+      })
+    );
 
     // CSV生成
-    const BOM = '\uFEFF'; // Excel用BOM
+    const BOM = '\uFEFF';
     const headers = [
-      '予約ID',
-      'ステータス',
-      '機材名',
-      'カテゴリ',
-      '部署',
-      '申請者名',
-      '連絡先',
-      '利用開始日時',
-      '利用終了日時',
-      '数量',
-      '利用目的',
-      '利用場所',
-      '作成日時'
+      '予約ID', 'ステータス', '機材名', 'カテゴリ', '部署',
+      '申請者名', '連絡先', '利用開始日時', '利用終了日時',
+      '数量', '利用目的', '利用場所', '作成日時'
     ];
 
     const statusLabels: Record<string, string> = {
-      pending: '承認待ち',
-      approved: '承認済み',
-      rejected: '却下',
-      cancelled: 'キャンセル',
-      completed: '完了'
+      pending: '承認待ち', approved: '承認済み', rejected: '却下',
+      cancelled: 'キャンセル', completed: '完了'
     };
 
-    const formatDateTime = (date: Date) => {
-      const d = new Date(date);
+    const formatDateTime = (value: any) => {
+      const d = toDate(value);
+      if (!d) return '';
       return d.toLocaleString('ja-JP', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit'
       });
     };
 
@@ -414,7 +332,7 @@ reservationRouter.get('/admin/export', async (req, res, next) => {
       return str;
     };
 
-    const rows = reservations.map((r) => [
+    const rows = reservationsWithEquipment.map((r) => [
       r.id,
       statusLabels[r.status] || r.status,
       r.equipment?.name || r.customEquipmentName || '',
@@ -454,17 +372,29 @@ reservationRouter.get('/my/history', async (req, res, next) => {
       return res.status(400).json({ message: '連絡先は必須です' });
     }
 
-    const queryBuilder = reservationRepo()
-      .createQueryBuilder('reservation')
-      .leftJoinAndSelect('reservation.equipment', 'equipment')
-      .leftJoinAndSelect('equipment.category', 'category')
-      .where('reservation.contactInfo = :contactInfo', { contactInfo });
+    const { items: rawItems, total } = await findAllReservations({
+      contactInfo: contactInfo as string,
+      page: Number(page),
+      limit: Number(limit),
+    });
 
-    const skip = (Number(page) - 1) * Number(limit);
-    queryBuilder.skip(skip).take(Number(limit));
-    queryBuilder.orderBy('reservation.createdAt', 'DESC');
-
-    const [items, total] = await queryBuilder.getManyAndCount();
+    // equipment情報を付加
+    const items = await Promise.all(
+      rawItems.map(async (r) => {
+        let equipment = undefined;
+        if (r.equipmentId) {
+          equipment = await findEquipmentById(r.equipmentId);
+        }
+        return {
+          ...r,
+          equipment,
+          startTime: toDate(r.startTime)?.toISOString(),
+          endTime: toDate(r.endTime)?.toISOString(),
+          createdAt: r.createdAt ? (r.createdAt as any).toDate?.()?.toISOString?.() || r.createdAt : undefined,
+          updatedAt: r.updatedAt ? (r.updatedAt as any).toDate?.()?.toISOString?.() || r.updatedAt : undefined,
+        };
+      })
+    );
 
     res.json({
       items,
@@ -490,9 +420,7 @@ reservationRouter.post('/my/cancel/:id', async (req, res, next) => {
       return res.status(400).json({ message: '連絡先は必須です' });
     }
 
-    const reservation = await reservationRepo().findOne({
-      where: { id: Number(id) }
-    });
+    const reservation = await findReservationById(id);
 
     if (!reservation) {
       return res.status(404).json({ message: '予約が見つかりません' });
@@ -504,20 +432,19 @@ reservationRouter.post('/my/cancel/:id', async (req, res, next) => {
     }
 
     // キャンセル可能なステータスかチェック
-    if (![ReservationStatus.PENDING, ReservationStatus.APPROVED].includes(reservation.status as ReservationStatus)) {
+    if (![ReservationStatus.PENDING, ReservationStatus.APPROVED].includes(reservation.status)) {
       return res.status(400).json({ message: 'この予約はキャンセルできません' });
     }
 
     // 開始日前かチェック
     const now = new Date();
-    if (new Date(reservation.startTime) <= now) {
+    const startTime = toDate(reservation.startTime);
+    if (startTime && startTime <= now) {
       return res.status(400).json({ message: '利用開始後の予約はキャンセルできません' });
     }
 
-    reservation.status = ReservationStatus.CANCELLED;
-    await reservationRepo().save(reservation);
-
-    res.json({ message: '予約をキャンセルしました', reservation });
+    const updated = await updateReservation(id, { status: ReservationStatus.CANCELLED });
+    res.json({ message: '予約をキャンセルしました', reservation: updated });
   } catch (error) {
     next(error);
   }
@@ -527,16 +454,26 @@ reservationRouter.post('/my/cancel/:id', async (req, res, next) => {
 reservationRouter.get('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const reservation = await reservationRepo().findOne({
-      where: { id: Number(id) },
-      relations: ['equipment', 'equipment.category', 'user']
-    });
+    const reservation = await findReservationById(id);
 
     if (!reservation) {
       return res.status(404).json({ message: '予約が見つかりません' });
     }
 
-    res.json(reservation);
+    // equipment情報を付加
+    let equipment = undefined;
+    if (reservation.equipmentId) {
+      equipment = await findEquipmentById(reservation.equipmentId);
+    }
+
+    res.json({
+      ...reservation,
+      equipment,
+      startTime: toDate(reservation.startTime)?.toISOString(),
+      endTime: toDate(reservation.endTime)?.toISOString(),
+      createdAt: reservation.createdAt ? (reservation.createdAt as any).toDate?.()?.toISOString?.() || reservation.createdAt : undefined,
+      updatedAt: reservation.updatedAt ? (reservation.updatedAt as any).toDate?.()?.toISOString?.() || reservation.updatedAt : undefined,
+    });
   } catch (error) {
     next(error);
   }
@@ -574,7 +511,6 @@ reservationRouter.post('/', async (req, res, next) => {
       return res.status(400).json({ message: '終了日時は開始日時より後にしてください' });
     }
 
-    let equipment = null;
     if (equipmentId) {
       // 予約可能かチェック
       const availability = await checkAvailability(equipmentId, start, end, quantity);
@@ -584,20 +520,20 @@ reservationRouter.post('/', async (req, res, next) => {
         });
       }
 
-      equipment = await equipmentRepo().findOne({ where: { id: equipmentId } });
+      const equipment = await findEquipmentById(equipmentId);
       if (!equipment) {
         return res.status(404).json({ message: '機器が見つかりません' });
       }
     }
 
     const trimmedCustomName = typeof customEquipmentName === 'string' ? customEquipmentName.trim() : undefined;
-    if (!equipment && !trimmedCustomName) {
+    if (!equipmentId && !trimmedCustomName) {
       return res.status(400).json({ message: 'その他予約の場合は名称を入力してください' });
     }
 
-    const reservation = reservationRepo().create({
-      equipment: equipment ?? undefined,
-      customEquipmentName: equipment ? undefined : trimmedCustomName,
+    const saved = await createReservation({
+      equipmentId: equipmentId || undefined,
+      customEquipmentName: equipmentId ? undefined : trimmedCustomName,
       department,
       applicantName,
       contactInfo,
@@ -610,8 +546,11 @@ reservationRouter.post('/', async (req, res, next) => {
       status: ReservationStatus.PENDING
     });
 
-    const saved = await reservationRepo().save(reservation);
-    res.status(201).json(saved);
+    res.status(201).json({
+      ...saved,
+      startTime: toDate(saved.startTime)?.toISOString(),
+      endTime: toDate(saved.endTime)?.toISOString(),
+    });
   } catch (error) {
     next(error);
   }
@@ -623,23 +562,20 @@ reservationRouter.put('/:id', async (req, res, next) => {
     const { id } = req.params;
     const { startTime, endTime, quantity, purpose, location, notes, status } = req.body;
 
-    const reservation = await reservationRepo().findOne({
-      where: { id: Number(id) },
-      relations: ['equipment']
-    });
+    const reservation = await findReservationById(id);
 
     if (!reservation) {
       return res.status(404).json({ message: '予約が見つかりません' });
     }
 
     // 日時・数量変更時は再チェック
-    if (reservation.equipment && (startTime || endTime || quantity)) {
-      const newStart = startTime ? new Date(startTime) : reservation.startTime;
-      const newEnd = endTime ? new Date(endTime) : reservation.endTime;
+    if (reservation.equipmentId && (startTime || endTime || quantity)) {
+      const newStart = startTime ? new Date(startTime) : toDate(reservation.startTime)!;
+      const newEnd = endTime ? new Date(endTime) : toDate(reservation.endTime)!;
       const newQuantity = quantity ?? reservation.quantity;
 
       const availability = await checkAvailability(
-        reservation.equipment.id,
+        reservation.equipmentId,
         newStart,
         newEnd,
         newQuantity,
@@ -651,22 +587,18 @@ reservationRouter.put('/:id', async (req, res, next) => {
           message: `予約可能数を超えています（残り: ${availability.remainingQuantity}）`
         });
       }
-
-      reservation.startTime = newStart;
-      reservation.endTime = newEnd;
-      reservation.quantity = newQuantity;
-    } else {
-      if (startTime) reservation.startTime = new Date(startTime);
-      if (endTime) reservation.endTime = new Date(endTime);
-      if (quantity) reservation.quantity = quantity;
     }
 
-    if (purpose !== undefined) reservation.purpose = purpose;
-    if (location !== undefined) reservation.location = location;
-    if (notes !== undefined) reservation.notes = notes;
-    if (status !== undefined) reservation.status = status;
+    const updateData: Record<string, unknown> = {};
+    if (startTime) updateData.startTime = new Date(startTime);
+    if (endTime) updateData.endTime = new Date(endTime);
+    if (quantity !== undefined) updateData.quantity = quantity;
+    if (purpose !== undefined) updateData.purpose = purpose;
+    if (location !== undefined) updateData.location = location;
+    if (notes !== undefined) updateData.notes = notes;
+    if (status !== undefined) updateData.status = status;
 
-    const saved = await reservationRepo().save(reservation);
+    const saved = await updateReservation(id, updateData);
     res.json(saved);
   } catch (error) {
     next(error);
@@ -677,15 +609,13 @@ reservationRouter.put('/:id', async (req, res, next) => {
 reservationRouter.delete('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const reservation = await reservationRepo().findOne({ where: { id: Number(id) } });
+    const reservation = await findReservationById(id);
 
     if (!reservation) {
       return res.status(404).json({ message: '予約が見つかりません' });
     }
 
-    reservation.status = ReservationStatus.CANCELLED;
-    await reservationRepo().save(reservation);
-
+    await updateReservation(id, { status: ReservationStatus.CANCELLED });
     res.json({ message: '予約をキャンセルしました' });
   } catch (error) {
     next(error);
