@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { Box, HStack, Badge, useDisclosure } from "@chakra-ui/react";
+import { Box, HStack, Badge, useDisclosure, useToast } from "@chakra-ui/react";
 import { FiCalendar } from "react-icons/fi";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -23,6 +23,7 @@ import ApplicantInfoModal, { type ApplicantData } from "./ApplicantInfoModal";
 import UsagePeriodModal, { type UsagePeriodData } from "./UsagePeriodModal";
 import UsageDetailsModal, { type UsageDetailsData } from "./UsageDetailsModal";
 import PageHeader from "../../components/PageHeader";
+import { isHoliday } from "japanese-holidays";
 
 export default function ReservationCalendar() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -53,6 +54,7 @@ export default function ReservationCalendar() {
 
   const calendarRef = useRef<FullCalendar>(null);
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   // Step 1: カテゴリ選択モーダル
   const {
@@ -139,6 +141,20 @@ export default function ReservationCalendar() {
       const clickedDate = new Date(info.dateStr);
 
       if (clickedDate < today) {
+        return;
+      }
+
+      // 土日と祝日は予約不可
+      const dayOfWeek = clickedDate.getDay();
+      if (dayOfWeek === 0 || dayOfWeek === 6 || isHoliday(clickedDate)) {
+        toast({
+          title: "予約できません",
+          description: "休業日（土日・祝日）は予約できません。",
+          status: "warning",
+          duration: 3000,
+          isClosable: true,
+          position: "top",
+        });
         return;
       }
 
@@ -349,13 +365,23 @@ export default function ReservationCalendar() {
           datesSet={handleDatesSet}
           dateClick={handleDateClick}
           eventDisplay="block"
-          dayCellClassNames={(arg) => {
+          dayMaxEvents={false}
+          dayCellClassNames={(arg: { date: Date }) => {
+            const classes: string[] = [];
             const today = new Date();
             today.setHours(0, 0, 0, 0);
+
             if (arg.date < today) {
-              return ["past-date"];
+              classes.push("past-date");
+            } else {
+              classes.push("future-date");
             }
-            return ["future-date"];
+
+            if (isHoliday(arg.date)) {
+              classes.push("holiday-date");
+            }
+
+            return classes;
           }}
         />
       </Box>
@@ -463,6 +489,42 @@ export default function ReservationCalendar() {
         }
         .fc-day-today {
           background-color: #bee3f8 !important;
+        }
+        /* 土曜日の背景色（薄い青）と操作無効化 */
+        .fc-day-sat {
+          background-color: #e6f7ff !important;
+        }
+        .fc-day-sat.future-date {
+          cursor: not-allowed !important;
+        }
+        .fc-day-sat.future-date:hover {
+          background-color: #e6f7ff !important; /* ホバー時の変化を無効化 */
+        }
+        /* 日曜日の背景色（薄い赤/ピンク）と操作無効化 */
+        .fc-day-sun {
+          background-color: #fff0f6 !important;
+        }
+        .fc-day-sun.future-date {
+          cursor: not-allowed !important;
+        }
+        .fc-day-sun.future-date:hover {
+          background-color: #fff0f6 !important;
+        }
+        /* 祝日の背景色（薄い赤/ピンク）と操作無効化 */
+        .holiday-date {
+          background-color: #fff0f6 !important;
+        }
+        .holiday-date.future-date {
+          cursor: not-allowed !important;
+        }
+        .holiday-date.future-date:hover {
+          background-color: #fff0f6 !important;
+        }
+        /* 過去の日は色を上書きしないように詳細度を上げるか、または元のグレーを優先するか。今回は土日祝でも過去ならグレーにする場合は以下を追加 */
+        .fc-daygrid-day.past-date.fc-day-sat,
+        .fc-daygrid-day.past-date.fc-day-sun,
+        .fc-daygrid-day.past-date.holiday-date {
+           background-color: #f7fafc !important;
         }
       `}</style>
     </Box>

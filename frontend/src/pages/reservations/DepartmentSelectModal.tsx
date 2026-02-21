@@ -33,68 +33,75 @@ export interface DepartmentData {
 
 // 部署カテゴリと各科のマッピング
 const DEPARTMENT_CATEGORIES: Record<string, string[]> = {
-  医師: [
-    "内科",
-    "外科",
+  "医師・診療局": [
+    "総合内科・感染症内科",
+    "糖尿病・内分泌代謝内科",
+    "腎臓内科",
+    "血液内科",
+    "脳神経内科",
+    "循環器内科",
+    "呼吸器内科",
+    "消化器内科",
+    "乳腺内分泌外科",
+    "消化器外科",
+    "脳神経外科",
+    "心臓血管外科",
     "整形外科",
+    "形成外科",
+    "呼吸器外科",
     "小児科",
     "産婦人科",
-    "眼科",
-    "耳鼻咽喉科",
-    "皮膚科",
     "泌尿器科",
-    "精神科",
+    "眼科",
+    "耳鼻咽喉科・頭頸部外科",
+    "口腔外科",
     "放射線科",
     "麻酔科",
     "救急科",
-    "循環器内科",
-    "消化器内科",
-    "呼吸器内科",
-    "脳神経外科",
-    "心臓血管外科",
+    "救命診療科",
   ],
   看護局: [
-    "外来",
-    "1病棟",
-    "2病棟",
-    "3病棟",
-    "4病棟",
-    "5病棟",
-    "ICU",
-    "HCU",
-    "手術室",
+    "Aブロック",
+    "Bブロック",
+    "Cブロック",
+    "Dブロック",
+    "Eブロック",
+    "Fブロック",
+    "Hブロック",
+    "Iブロック",
+    "Jブロック",
     "救急外来",
-    "透析室",
-    "内視鏡室",
+    "ICU/CCU",
+    "りんくう手術室",
+    "5S病棟",
+    "5M病棟",
+    "HCU病棟",
+    "6S病棟",
+    "6M病棟",
+    "NICU/GCU",
+    "7S病棟",
+    "7M病棟",
+    "8S病棟",
+    "8M病棟",
+    "救命初療/手術室",
+    "救命ICU",
+    "感染症センター",
+    "滅菌室",
   ],
   診療支援局: [
-    "薬剤部",
-    "検査部",
-    "放射線部",
-    "リハビリテーション部",
-    "栄養管理部",
-    "ME機器管理室",
-    "臨床工学部",
-    "病理部",
-    "輸血部",
+    "薬剤部門",
+    "検査部門",
+    "放射線部門",
+    "臨床工学・技術部門",
+    "リハビリテーション部門",
+    "栄養部門",
   ],
-  "総務・事務": [
+  事務局: [
+    "経営企画室",
     "総務課",
-    "経理課",
-    "人事課",
-    "医事課",
-    "情報システム課",
-    "施設管理課",
-    "地域連携室",
-  ],
-  委員会: [
-    "医療安全管理委員会",
-    "感染対策委員会",
-    "褥瘡対策委員会",
-    "栄養サポートチーム",
-    "緩和ケアチーム",
-    "ICT委員会",
-    "教育委員会",
+    "会計課",
+    "医療マネジメント課",
+    "医療相談室",
   ],
 };
 
@@ -148,7 +155,7 @@ export default function DepartmentSelectModal({
   };
 
   const handleCategorySelect = (category: string) => {
-    if (category === "選択にない部署") {
+    if (category === "選択にない所属の方はこちら" || category === "委員会") {
       setSelectedCategory(category);
       setShowCustomInput(true);
       setSelectedDepartment("");
@@ -188,7 +195,11 @@ export default function DepartmentSelectModal({
     (showCustomInput && customDepartment.trim()) ||
     (!showCustomInput && selectedDepartment);
 
-  const categories = [...Object.keys(DEPARTMENT_CATEGORIES), "選択にない部署"];
+  const categories = [
+    ...Object.keys(DEPARTMENT_CATEGORIES),
+    "委員会",
+    "選択にない所属の方はこちら",
+  ];
 
   return (
     <Modal
@@ -335,16 +346,31 @@ export default function DepartmentSelectModal({
                   </Button>
                 </HStack>
                 <FormControl>
-                  <FormLabel fontWeight="semibold">部署名を入力</FormLabel>
+                  <FormLabel fontWeight="semibold">
+                    {selectedCategory === "委員会"
+                      ? "委員会名を入力"
+                      : "所属を入力"}
+                  </FormLabel>
                   <Input
                     value={customDepartment}
                     onChange={(e) => setCustomDepartment(e.target.value)}
-                    placeholder="例: 総合診療科、地域医療部"
+                    placeholder={
+                      selectedCategory === "委員会"
+                        ? "例: 医療安全管理委員会"
+                        : "例: ⚪︎⚪︎センター など"
+                    }
                     size="lg"
                     borderRadius="lg"
                   />
-                  <Text fontSize="xs" color="gray.500" mt={2}>
-                    ※ リストにない部署の場合は直接入力してください
+                  <Text
+                    fontSize="xs"
+                    color="red.500"
+                    mt={2}
+                    fontWeight="semibold"
+                  >
+                    {selectedCategory === "委員会"
+                      ? "※ 委員会名を正確に記載してください"
+                      : "※ 所属を正確に記載してください"}
                   </Text>
                 </FormControl>
               </VStack>
