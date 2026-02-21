@@ -71,24 +71,19 @@ export default function UsagePeriodModal({
 }: Props) {
   const gradientBg = useColorModeValue(
     "linear(to-br, green.500, teal.500)",
-    "linear(to-br, green.600, teal.600)"
+    "linear(to-br, green.600, teal.600)",
   );
 
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    control,
-    watch,
-  } = useForm<UsagePeriodData>({
-    defaultValues: {
-      startDate: initialData?.startDate || "",
-      startTime: initialData?.startTime || "09:00",
-      endDate: initialData?.endDate || "",
-      endTime: initialData?.endTime || "17:00",
-      ...initialData,
-    },
-  });
+  const { register, handleSubmit, setValue, control, watch } =
+    useForm<UsagePeriodData>({
+      defaultValues: {
+        startDate: initialData?.startDate || "",
+        startTime: initialData?.startTime || "09:00",
+        endDate: initialData?.endDate || "",
+        endTime: initialData?.endTime || "17:00",
+        ...initialData,
+      },
+    });
 
   // 開始日の変更を監視
   const startDateStr = watch("startDate");
@@ -130,7 +125,7 @@ export default function UsagePeriodModal({
             return;
           }
         }
-        
+
         // 返却日を1週間後（土日なら翌週月曜日）に設定
         // ただし、initialDataがあり、かつ開始日が変更されていない場合は上書きしないなど
         // 細かい制御が必要だが、今回は「開始日を変えたら連動する」動きを優先
@@ -195,8 +190,15 @@ export default function UsagePeriodModal({
                     貸出・返却について
                   </Text>
                   <Text fontSize="sm" color="blue.600">
-                    貸出・返却は<Text as="span" fontWeight="bold">平日（月〜金）9:00〜17:00</Text>のみ対応しております。
-                    貸与期間は<Text as="span" fontWeight="bold">1週間</Text>です。
+                    貸出・返却は
+                    <Text as="span" fontWeight="bold">
+                      平日（月〜金）9:00〜17:00
+                    </Text>
+                    のみ対応しております。 貸与期間は
+                    <Text as="span" fontWeight="bold">
+                      1週間
+                    </Text>
+                    です。
                     返却日が土日となる場合は、自動的に翌週月曜日に設定されます。
                   </Text>
                 </Box>
@@ -216,21 +218,14 @@ export default function UsagePeriodModal({
                       rules={{ required: "貸出日は必須です" }}
                       render={({ field }) => (
                         <DatePicker
-                          selected={field.value ? parseStringToDate(field.value) : null}
-                          onChange={(date: Date | null) => {
-                            if (date) {
-                              const adjustedDate = isWeekday(date) ? date : getNextWeekday(date);
-                              field.onChange(formatDateToString(adjustedDate));
-                            }
-                          }}
-                          filterDate={isWeekday}
-                          dayClassName={getDayClassName}
+                          selected={
+                            field.value ? parseStringToDate(field.value) : null
+                          }
+                          onChange={() => {}}
                           locale="ja"
                           dateFormat="yyyy/MM/dd (EEE)"
-                          minDate={new Date()}
+                          disabled
                           customInput={<CustomDateInput />}
-                          popperPlacement="bottom-start"
-                          showPopperArrow={false}
                         />
                       )}
                     />
@@ -265,10 +260,14 @@ export default function UsagePeriodModal({
                       rules={{ required: "返却日は必須です" }}
                       render={({ field }) => (
                         <DatePicker
-                          selected={field.value ? parseStringToDate(field.value) : null}
+                          selected={
+                            field.value ? parseStringToDate(field.value) : null
+                          }
                           onChange={(date: Date | null) => {
                             if (date) {
-                              const adjustedDate = isWeekday(date) ? date : getNextWeekday(date);
+                              const adjustedDate = isWeekday(date)
+                                ? date
+                                : getNextWeekday(date);
                               field.onChange(formatDateToString(adjustedDate));
                             }
                           }}
@@ -276,7 +275,10 @@ export default function UsagePeriodModal({
                           dayClassName={getDayClassName}
                           locale="ja"
                           dateFormat="yyyy/MM/dd (EEE)"
-                          minDate={(startDateStr && parseStringToDate(startDateStr)) || new Date()}
+                          minDate={
+                            (startDateStr && parseStringToDate(startDateStr)) ||
+                            new Date()
+                          }
                           customInput={<CustomDateInput />}
                           popperPlacement="bottom-start"
                           showPopperArrow={false}
