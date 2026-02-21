@@ -148,7 +148,10 @@ equipmentRouter.post('/', upload.single('image'), async (req, res, next) => {
     }
 
     const file = (req as MulterRequest).file;
-    const imageUrl = file ? buildImageUrl(file.filename) : undefined;
+    // ファイルアップロード優先、なければGoogle Drive URLテキストを使用
+    const imageUrl = file
+      ? buildImageUrl(file.filename)
+      : req.body.imageUrl || undefined;
 
     const saved = await createEquipment({
       name,
@@ -209,10 +212,14 @@ equipmentRouter.put('/:id', upload.single('image'), async (req, res, next) => {
     }
 
     if (file) {
+      // ファイルアップロードがある場合
       if (!removeImage) {
         await removeImageFile(existing.imageUrl);
       }
       updateData.imageUrl = buildImageUrl(file.filename);
+    } else if (!removeImage && req.body.imageUrl !== undefined) {
+      // Google Drive URLテキストが送信された場合
+      updateData.imageUrl = req.body.imageUrl || null;
     }
 
     const saved = await updateEquipment(id, updateData);
