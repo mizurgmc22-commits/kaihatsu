@@ -13,6 +13,9 @@ backend/database.sqlite
 serviceAccountKey.json
 **/serviceAccountKey.json
 
+# Credentials
+CREDENTIALS.md
+
 # Environment
 .env
 .env.local

@@ -142,7 +142,7 @@ export default function TopPageRenderer({
   return (
     <Box bg="#e0f2f1" minH="calc(100vh - 64px)" p={4}>
       {/* ヘッダー */}
-      <Flex mb={6} justify="space-between" align="center" wrap="wrap" gap={4}>
+      <Flex mb={4} justify="space-between" align="center" wrap="wrap" gap={4}>
         <HStack>
           <Icon as={FiHome} boxSize={6} color={DARK_BLUE} />
           <Heading size="lg" color={DARK_BLUE}>
@@ -151,17 +151,6 @@ export default function TopPageRenderer({
         </HStack>
 
         <Flex align="center" gap={3}>
-          <Button
-            as={RouterLink}
-            to="/calendar"
-            colorScheme="orange"
-            leftIcon={<FiCalendar />}
-            shadow="md"
-            size="md"
-            mr={2}
-          >
-            新規予約
-          </Button>
           <HStack
             spacing={2}
             bg="white"
@@ -201,6 +190,45 @@ export default function TopPageRenderer({
           </Badge>
         </Flex>
       </Flex>
+
+      {/* 新規予約バナー */}
+      <Box
+        as={RouterLink}
+        to="/calendar"
+        display="block"
+        mb={6}
+        bgGradient="linear(to-r, #ff6d00, #ff9100)"
+        borderRadius="xl"
+        px={8}
+        py={5}
+        boxShadow="lg"
+        _hover={{
+          bgGradient: "linear(to-r, #e65100, #ff6d00)",
+          transform: "translateY(-2px)",
+          boxShadow: "xl",
+        }}
+        transition="all 0.2s"
+        cursor="pointer"
+        textDecoration="none"
+      >
+        <Flex align="center" justify="center" gap={4}>
+          <Icon as={FiCalendar} boxSize={10} color="white" />
+          <VStack spacing={0} align="start">
+            <Text
+              fontSize="2xl"
+              fontWeight="extrabold"
+              color="white"
+              letterSpacing="wide"
+            >
+              新規予約
+            </Text>
+            <Text fontSize="sm" color="whiteAlpha.900">
+              予約カレンダーを開いて日付を選択してください
+            </Text>
+          </VStack>
+          <Icon as={FiArrowRight} boxSize={7} color="white" ml={2} />
+        </Flex>
+      </Box>
 
       <Grid
         templateColumns={{ base: "1fr", lg: "3fr 1fr" }}
